@@ -14,7 +14,6 @@ description:         Please see the README on GitHub at <https://github.com/Kapr
 
 dependencies:
 - base >= 4.7 && < 5
-- classy-prelude
 
 ghc-options:
 - -Wall
@@ -30,10 +29,14 @@ ghc-options:
 library:
   source-dirs: src
   dependencies:
-    - classy-prelude
-    - text
-    - scotty
     - aeson
+    - bytestring
+    - fakedata
+    - jsonifier
+    - random
+    - scotty
+    - text
+    - uuid
 
 executables:
   nuuanu-exe:
@@ -45,6 +48,9 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - nuuanu
+    when:
+    - condition: false
+      other-modules: Paths_nuuanu
 
 tests:
   nuuanu-test:

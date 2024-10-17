@@ -37,23 +37,22 @@ library
   build-depends:
       aeson
     , base >=4.7 && <5
-    , classy-prelude
+    , bytestring
+    , fakedata
+    , jsonifier
+    , random
     , scotty
     , text
+    , uuid
   default-language: Haskell2010
 
 executable nuuanu-exe
   main-is: Main.hs
-  other-modules:
-      Paths_nuuanu
-  autogen-modules:
-      Paths_nuuanu
   hs-source-dirs:
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
-    , classy-prelude
     , nuuanu
   default-language: Haskell2010
 
@@ -69,6 +68,5 @@ test-suite nuuanu-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
-    , classy-prelude
     , nuuanu
   default-language: Haskell2010
