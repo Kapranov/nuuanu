@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Platform.HTTP
   (
@@ -10,6 +11,10 @@ module Platform.HTTP
 import Data.Aeson (object, (.=), FromJSON, ToJSON)
 import Data.Text
 import Data.UUID
+import Faker
+import Faker.Address
+import Faker.Combinators
+import Faker.Name
 import GHC.Generics
 import System.Random
 import Web.Scotty
@@ -26,25 +31,21 @@ newUUID =
 data User =
   User {
     userId :: UUID,
-    userName :: String,
-    userAddress :: String
+    userName :: Text,
+    userAddress :: Text
   } deriving (Show, Generic, Eq)
 
 instance ToJSON User
 instance FromJSON User
 
-user1 :: User
-user1 = User (newUUID !! 0) "some #1 userName" "some #1 userAddress"
-user2 :: User
-user2 = User (newUUID !! 1) "some #2 userName" "some #2 userAddress"
-user3 :: User
-user3 = User (newUUID !! 2) "some #3 userName" "some #3 userAddress"
-
-allUsers :: [User]
-allUsers = [user1, user2, user3]
-
 start :: Int -> IO ()
 start port = do
+  dataName <- generateNonDeterministic $ listOf 3 name
+  dataAddress <- generateNonDeterministic $ listOf 3  fullAddress
+  let user1 = User (newUUID !! 0) (dataName !! 0) (dataAddress !! 0)
+  let user2 = User (newUUID !! 1) (dataName !! 1) (dataAddress !! 1)
+  let user3 = User (newUUID !! 2) (dataName !! 2) (dataAddress !! 2)
+  let allUsers = [user1, user2, user3]
   print ("Starting Server at port " ++ show port)
   scotty port $ do
     get "/" $ html $ "<h1>Backend API server (haskell Scotty)</h1>"
