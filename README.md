@@ -12,6 +12,7 @@ Build
         $ stack run
         $ export PORT=8080
         $ stack exec ghci
-        2024stack exec -- nuuanu-exe --port $PORT
+        > :load app/Main.hs
+        $ stack exec -- nuuanu-exe --port $PORT
 
 ### 10 Oct 2024 by Oleg G.Kapranov
