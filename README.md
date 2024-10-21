@@ -15,6 +15,17 @@ Build
         > :load app/Main.hs
         $ stack exec -- nuuanu-exe --port $PORT
 
+Allow promotion of data types to kind level
+--------------------------------------------
+
+        ghci> :set -XDataKinds
+        ghci> :k Succ
+        Succ :: Nat -> Nat
+        ghci> :k Zero
+        Zero :: Nat
+        ghci> (mult four $ add two three)
+        20
+
 Tests
 ------
 

@@ -27,6 +27,7 @@ library
   exposed-modules:
       Criterion.Fibber
       Criterion.Overhead
+      Data.Natural.Number
       Data.String.Strip
       Lib
       Platform.HTTP
