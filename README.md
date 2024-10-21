@@ -15,4 +15,10 @@ Build
         > :load app/Main.hs
         $ stack exec -- nuuanu-exe --port $PORT
 
+Tests
+------
+
+        $ stack test
+        $ stack runhaskell test/Spec.hs
+
 ### 10 Oct 2024 by Oleg G.Kapranov
