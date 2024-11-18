@@ -15,6 +15,17 @@ Build
         > :load app/Main.hs
         $ stack exec -- nuuanu-exe --port $PORT
 
+Queries through a web browser
+------------------------------
+
+- `localhost:8080` Welcome greeting
+- `localhost:8080/florida.json` The sports and top news
+- `localhost:8080/kokua.json` An example of a null data
+- `localhost:8080/manoa.json` All users application data
+- `localhost:8080/pahoa.json` The local today info
+- `localhost:8080/users/5eb2a0c4-5047-4439-a6f6-aefca3a38061` Using user id as a query parameter in a view of users
+- `localhost:8080/hello` 404: File Not Found!
+
 Allow promotion of data types to kind level
 --------------------------------------------
 
