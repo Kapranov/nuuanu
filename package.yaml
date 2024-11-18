@@ -33,11 +33,13 @@ library:
     - bytestring
     - criterion
     - criterion-measurement
+    - doctest
     - fakedata
     - jsonifier
     - random
     - scotty
     - text
+    - time
     - uuid
 
 executables:

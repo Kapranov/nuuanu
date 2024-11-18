@@ -38,6 +38,12 @@ git_stree:
 git_vtree:
 	$(V)$(GIT) vtree
 
+start:
+	$(V)$(STACK) exec ghci
+
+no_prelude:
+	$(V)ghci -XNoImplicitPrelude
+
 run:
 	$(V)$(STACK) build --fast && $(STACK) exec -- $(package)
 
