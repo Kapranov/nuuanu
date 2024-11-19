@@ -26,6 +26,27 @@ Queries through a web browser
 - `localhost:8080/users/5eb2a0c4-5047-4439-a6f6-aefca3a38061` Using user id as a query parameter
 - `localhost:8080/hello` 404: File Not Found!
 
+Curl to make a query to the server
+-----------------------------------
+
+```
+bash> curl localhost:8080
+bash> curl localhost:8080/avian.json | jq .
+bash> curl localhost:8080/kokua.json | jq .
+bash> curl localhost:8080/manoa.json | jq .
+bash> curl localhost:8080/pahoa.json | jq .
+bash> curl localhost:8080/users/baa6d0ef-d278-4b10-9636-87770f30d636 | jq .
+bash> curl localhost:8080/agent
+bash> curl localhost:8080/agent -v
+bash> curl localhost:8080/hello
+bash> curl localhost:8080/hello.txt
+bash> curl localhost:8080/hello.json | jq .
+bash> curl localhost:8080/oahus
+bash> curl localhost:8080/oahut.txt
+bash> curl localhost:8080/oahuj.json | jq .
+bash> curl localhost:8080/reefs?name=Aloha
+```
+
 Allow promotion of data types to kind level
 --------------------------------------------
 

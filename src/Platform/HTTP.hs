@@ -62,18 +62,28 @@ matchesId beam user = toString (userId user) == beam
 routes :: ScottyM ()
 routes = do
   get "/" rootAction
-  get "/florida.json" floridaAction
-  get "/kokua.json"   kokuaAction
-  get "/manoa.json"   manoaAction
-  get "/pahoa.json"   pahoaAction
-  get "/users/:word"  usersAction
+  get "/agent"       agentAction
+  get "/avian.json"  avianAction
+  get "/kokua.json"  kokuaAction
+  get "/manoa.json"  manoaAction
+  get "/oahuj.json"  oahujAction
+  get "/oahus"       oahusAction
+  get "/oahut.txt"   oahutAction
+  get "/pahoa.json"  pahoaAction
+  get "/reefs"       reefsAction
+  get "/users/:word" usersAction
 
 rootAction :: ActionM ()
 rootAction = do
   html $ "<h1>Backend API server (haskell Scotty)</h1>"
 
-floridaAction :: ActionM ()
-floridaAction = do
+agentAction :: ActionM ()
+agentAction = do
+  agent <- header "User-Agent"
+  maybe (raise "User-Agent header not found!") text agent
+
+avianAction :: ActionM ()
+avianAction = do
   json $ object ["top news" .= ("Hurricane Milton weakens as it marches across central Florida" :: Text), "sports" .= ("Why 49ers should watch former UH linebacker Jeff Ulbrich, Jets interim coach" :: Text)]
 
 kokuaAction :: ActionM ()
@@ -85,9 +95,26 @@ manoaAction = do
   users <- liftIO allUsers
   json users
 
+oahujAction :: ActionM ()
+oahujAction = do
+  json $ object ["text" .= ("Hello, World!" :: Text)]
+
+oahusAction :: ActionM ()
+oahusAction = do
+  html $ mconcat ["<h1>", "Hello, World!", "</h1>"]
+
+oahutAction :: ActionM ()
+oahutAction = do
+  text "Hello, World!"
+
 pahoaAction :: ActionM ()
 pahoaAction = do
   json $ object ["local" .= ("A combination bus hub and library project planned for Pahoa is on track to begin construction next year." :: Text), "today" .= ("Honolulu airport’s satisfaction score this year was 593 out of a possible 1,000" :: Text)]
+
+reefsAction :: ActionM ()
+reefsAction = do
+  pana <- queryParam "name"
+  html $ mconcat ["<h1>Hello ", pana, "</h1>"]
 
 usersAction :: ActionM ()
 usersAction = do
