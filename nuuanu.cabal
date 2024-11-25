@@ -33,6 +33,9 @@ library
       Data.String.Strip
       Lib
       Platform.HTTP
+      Platform.JWT
+      Websocket.Client
+      Websocket.Server
   other-modules:
       Paths_nuuanu
   autogen-modules:
@@ -43,17 +46,25 @@ library
   build-depends:
       aeson
     , base >=4.7 && <5
+    , base64-bytestring
     , bytestring
     , criterion
     , criterion-measurement
+    , crypton
     , doctest
+    , entropy
     , fakedata
+    , jose-jwt
     , jsonifier
+    , mtl
+    , network
     , random
     , scotty
     , text
     , time
     , uuid
+    , websockets
+    , wuss
   default-language: Haskell2010
 
 executable nuuanu-exe

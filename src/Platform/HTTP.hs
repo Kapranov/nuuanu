@@ -24,14 +24,8 @@ import GHC.List as L
 import System.Random
 import Web.Scotty
 
-newUUID :: [UUID]
-newUUID =
-  let seed = 123
-      g0 = mkStdGen seed
-      (u1, g1) = random g0
-      (u2, g2) = random g1
-      (u3, _g3) = random g2
-  in [u1,u2,u3]
+instance ToJSON User
+instance FromJSON User
 
 data User =
   User {
@@ -42,8 +36,14 @@ data User =
     updatedAt :: String
   } deriving (Show, Generic, Eq)
 
-instance ToJSON User
-instance FromJSON User
+newUUID :: [UUID]
+newUUID =
+  let seed = 123
+      g0 = mkStdGen seed
+      (u1, g1) = random g0
+      (u2, g2) = random g1
+      (u3, _g3) = random g2
+  in [u1,u2,u3]
 
 allUsers :: IO [User]
 allUsers = do

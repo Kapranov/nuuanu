@@ -30,17 +30,25 @@ library:
   source-dirs: src
   dependencies:
     - aeson
+    - base64-bytestring
     - bytestring
     - criterion
     - criterion-measurement
+    - crypton
     - doctest
+    - entropy
     - fakedata
+    - jose-jwt
     - jsonifier
+    - mtl
+    - network
     - random
     - scotty
     - text
     - time
     - uuid
+    - websockets
+    - wuss
 
 executables:
   nuuanu-exe:
