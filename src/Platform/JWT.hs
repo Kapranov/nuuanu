@@ -1,9 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# language PackageImports #-}
-
 module Platform.JWT
-  (
-    main
+  ( main
   , maxSaveFileSize
   , saveKeyLength
   ) where
@@ -14,8 +11,11 @@ module Platform.JWT
 
 import Control.Monad
 import System.Random
-import "crypton" Crypto.PubKey.Ed25519 as Ed25519
--- import "crypton" qualified Crypto.PubKey.Ed25519 as Ed25519
+import Auth.Bisque ( newSecret
+                   , serializePublicKey
+                   , serializeSecretKeyHex
+                   , toPublish
+                   )
 
 -- import Data.ByteString
 -- import qualified Data.ByteString.Base64
@@ -68,19 +68,19 @@ random_secret num = do
 -- random_string :: String
 -- random_string :crypto.strong_rand_bytes(length) |> Base.encode64(padding: false) |> binary_part(0, length)
 
--- newtype Base64Octets = Base64Octets B.ByteString deriving (Eq, Show)
-
-newtype MySecretKey = SecretKey Ed25519.SecretKey deriving (Eq, Show)
-
-myGenerateSecretKey :: IO MySecretKey
-myGenerateSecretKey = SecretKey <$> Ed25519.generateSecretKey
-
 main :: IO ()
 main = do
   genChar <- random_char
   genSecret <- random_secret 64
   print genChar
   print genSecret
+  -- Create a key pair
+  secretKey <- newSecret
+  let publicKey = toPublish secretKey
+  -- will print the hex-encoded secret key
+  print $ serializeSecretKeyHex secretKey
+  -- will print the hex-encoded public key
+  print $ serializePublicKey publicKey
 --  currentTime <- liftM round getPOSIXTime
 --  let expirationTime = currentTime + 864000 -- ten days
 --  print expirationTime

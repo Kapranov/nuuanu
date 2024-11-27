@@ -25,6 +25,10 @@ source-repository head
 
 library
   exposed-modules:
+      Auth.Bisque
+      Auth.Bisque.Crypto
+      Auth.Bisque.Example
+      Auth.Bisque.Utils
       Criterion.Fibber
       Criterion.Overhead
       Data.Algebraic.Custom
@@ -46,6 +50,7 @@ library
   build-depends:
       aeson
     , base >=4.7 && <5
+    , base16
     , base64-bytestring
     , bytestring
     , criterion
@@ -56,6 +61,7 @@ library
     , fakedata
     , jose-jwt
     , jsonifier
+    , memory
     , mtl
     , network
     , random

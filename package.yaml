@@ -30,6 +30,7 @@ library:
   source-dirs: src
   dependencies:
     - aeson
+    - base16
     - base64-bytestring
     - bytestring
     - criterion
@@ -40,6 +41,7 @@ library:
     - fakedata
     - jose-jwt
     - jsonifier
+    - memory
     - mtl
     - network
     - random
