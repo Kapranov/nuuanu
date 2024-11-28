@@ -4,7 +4,6 @@
 module Auth.Bisque.Crypto
   ( MyPublicKey
   , MySecretKey
-  , MySignature
   , genSecretKey
   , pkBytes
   , readEd25519PublicKey
@@ -20,7 +19,6 @@ import Data.ByteString (ByteString)
 
 newtype MySecretKey = SecretKey Ed25519.SecretKey deriving newtype (Eq, Show)
 newtype MyPublicKey = PublicKey Ed25519.PublicKey deriving newtype (Eq, Show)
-newtype MySignature = Signature ByteString deriving newtype (Eq, Show)
 
 readEd25519SecretKey :: ByteString -> Maybe MySecretKey
 readEd25519SecretKey bs = SecretKey <$> maybeCryptoError (Ed25519.secretKey bs)

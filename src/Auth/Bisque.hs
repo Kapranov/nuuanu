@@ -32,6 +32,7 @@ import Control.Monad       ((<=<))
 import Data.ByteString     (ByteString)
 import qualified Data.Text as Text
 
+-- | Create a key secret key
 newSecret :: IO MySecretKey
 newSecret = genSecretKey
 

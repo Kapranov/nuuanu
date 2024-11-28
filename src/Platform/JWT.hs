@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 module Platform.JWT
   ( main
   , maxSaveFileSize
@@ -12,7 +13,7 @@ module Platform.JWT
 import Control.Monad
 import System.Random
 import Auth.Bisque ( newSecret
-                   , serializePublicKey
+                   , serializePublicKeyHex
                    , serializeSecretKeyHex
                    , toPublish
                    )
@@ -68,19 +69,27 @@ random_secret num = do
 -- random_string :: String
 -- random_string :crypto.strong_rand_bytes(length) |> Base.encode64(padding: false) |> binary_part(0, length)
 
+-- | Create a token
+-- myBisque :: MySecretKey -> IO (Bisque Open Verified)
+-- myBisque secretKey =
+--   mkBisque secretKey [block|
+--     user("1234");
+--     check if operation("read");
+--   |]
+
 main :: IO ()
 main = do
   genChar <- random_char
   genSecret <- random_secret 64
   print genChar
   print genSecret
-  -- Create a key pair
+  -- | Create a key pair 'SecretKey' and 'PublicKey'
   secretKey <- newSecret
   let publicKey = toPublish secretKey
-  -- will print the hex-encoded secret key
+  -- | Will print the hex-encoded secret key
   print $ serializeSecretKeyHex secretKey
-  -- will print the hex-encoded public key
-  print $ serializePublicKey publicKey
+  -- | Will print the hex-encoded public key
+  print $ serializePublicKeyHex publicKey
 --  currentTime <- liftM round getPOSIXTime
 --  let expirationTime = currentTime + 864000 -- ten days
 --  print expirationTime
