@@ -51,6 +51,10 @@ library:
     - uuid
     - websockets
     - wuss
+    - th-lift-instances
+    - containers
+    - template-haskell
+    - validation-selective
 
 executables:
   nuuanu-exe:

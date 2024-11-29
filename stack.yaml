@@ -2,3 +2,5 @@ snapshot:
   url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/22/37.yaml
 packages:
 - .
+extra-deps:
+  - validation-selective-0.2.0.0

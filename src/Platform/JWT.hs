@@ -6,17 +6,17 @@ module Platform.JWT
   , saveKeyLength
   ) where
 
--- import Control.Monad (liftM)
--- import Data.Time.Clock.POSIX (getPOSIXTime)
 -- import Jose.Jwt
 
-import Control.Monad
-import System.Random
 import Auth.Bisque ( newSecret
                    , serializePublicKeyHex
                    , serializeSecretKeyHex
                    , toPublish
                    )
+-- import Control.Monad (liftM, replicateM)
+import Control.Monad (replicateM)
+-- import Data.Time.Clock.POSIX (getPOSIXTime)
+import System.Random
 
 -- import Data.ByteString
 -- import qualified Data.ByteString.Base64
@@ -72,9 +72,9 @@ random_secret num = do
 -- | Create a token
 -- myBisque :: MySecretKey -> IO (Bisque Open Verified)
 -- myBisque secretKey =
---   mkBisque secretKey [block|
---     user("1234");
---     check if operation("read");
+--    mkBisque secretKey [block|
+--      user("1234");
+--      check if operation("read");
 --   |]
 
 main :: IO ()
@@ -90,10 +90,10 @@ main = do
   print $ serializeSecretKeyHex secretKey
   -- | Will print the hex-encoded public key
   print $ serializePublicKeyHex publicKey
---  currentTime <- liftM round getPOSIXTime
---  let expirationTime = currentTime + 864000 -- ten days
---  print expirationTime
---  let claims = mempty { unregisteredClaims = [("sub", String "public_key"), ("exp", Number $ fromIntegral expirationTime)] }
+  -- currentTime <- liftM round getPOSIXTime
+  -- let expirationTime = currentTime + 864000 -- ten days
+  -- putStrLn $ show $ expirationTime
+  -- let claims = mempty { unregisteredClaims = [("sub", String "public_key"), ("exp", Number $ fromIntegral expirationTime)] }
 --  let key = Secret "private_key"
 --  let token = encode [HS256] key claims
 --  print token
