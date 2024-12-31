@@ -11,6 +11,13 @@ packages:
       size: 697
   original:
     hackage: validation-selective-0.2.0.0
+- completed:
+    hackage: text-display-0.0.5.2@sha256:6e6a5bf1c83dfa6c34692ed5d8ea87f1bd385984309b42c302f2156f4d82477b,2670
+    pantry-tree:
+      sha256: e84ac3f5fdc4d6e1c544174735beb80474cf7d7b849abfd1ae6184517a30c1c1
+      size: 3364
+  original:
+    hackage: text-display-0.0.5.2
 snapshots:
 - completed:
     sha256: c6274f9587d6bf40b6aaa7d1092684c37a2d8bb1e0df999ae0e2b755db15682d

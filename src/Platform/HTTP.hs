@@ -4,15 +4,15 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Platform.HTTP
-  (
-    start
+  ( newUUID
+  , start
   ) where
 
 import Control.Monad()
 import Control.Monad.IO.Class
-import Data.Aeson (Value (Null), object, (.=), FromJSON, ToJSON)
+import Data.Aeson             (Value (Null), object, (.=), FromJSON, ToJSON)
 import Data.Text
-import Data.Time (getCurrentTime, UTCTime)
+import Data.Time              (getCurrentTime, UTCTime)
 import Data.Time.Format
 import Data.UUID
 import Faker
@@ -20,7 +20,7 @@ import Faker.Address
 import Faker.Combinators
 import Faker.Name
 import GHC.Generics
-import GHC.List as L
+import GHC.List                as L
 import System.Random
 import Web.Scotty
 
@@ -38,12 +38,18 @@ data User =
 
 newUUID :: [UUID]
 newUUID =
-  let seed = 123
+  let seed = 123456789
       g0 = mkStdGen seed
-      (u1, g1) = random g0
-      (u2, g2) = random g1
-      (u3, _g3) = random g2
-  in [u1,u2,u3]
+      (u1, g1)  = random g0
+      (u2, g2)  = random g1
+      (u3, g3)  = random g2
+      (u4, g4)  = random g3
+      (u5, g5)  = random g4
+      (u6, g6)  = random g5
+      (u7, g7)  = random g6
+      (u8, g8)  = random g7
+      (u9, _g9) = random g8
+  in [u1,u2,u3,u4,u5,u6,u7,u8,u9]
 
 allUsers :: IO [User]
 allUsers = do

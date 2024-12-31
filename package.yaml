@@ -27,7 +27,7 @@ ghc-options:
 - -Wredundant-constraints
 
 library:
-  source-dirs: src
+  source-dirs: [benchmarks, src]
   dependencies:
     - aeson
     - base16
@@ -55,6 +55,18 @@ library:
     - containers
     - template-haskell
     - validation-selective
+    - protobuf
+    - cereal
+    - attoparsec
+    - parser-combinators
+    - megaparsec
+    - regex-tdfa
+    - async
+    - servant-server
+    - wai
+    - text-display
+    - filepath
+    - unix
 
 executables:
   nuuanu-exe:

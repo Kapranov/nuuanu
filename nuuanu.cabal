@@ -25,10 +25,19 @@ source-repository head
 
 library
   exposed-modules:
+      Main
       Auth.Bisque
       Auth.Bisque.Crypto
       Auth.Bisque.Datalog.AST
+      Auth.Bisque.Datalog.Executor
+      Auth.Bisque.Datalog.Parser
+      Auth.Bisque.Datalog.ScopedExecutor
       Auth.Bisque.Example
+      Auth.Bisque.Proto
+      Auth.Bisque.ProtoBufAdapter
+      Auth.Bisque.Servant
+      Auth.Bisque.Symbols
+      Auth.Bisque.Timer
       Auth.Bisque.Token
       Auth.Bisque.Utils
       Criterion.Fibber
@@ -47,14 +56,18 @@ library
   autogen-modules:
       Paths_nuuanu
   hs-source-dirs:
+      benchmarks
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       aeson
+    , async
+    , attoparsec
     , base >=4.7 && <5
     , base16
     , base64-bytestring
     , bytestring
+    , cereal
     , containers
     , criterion
     , criterion-measurement
@@ -62,19 +75,28 @@ library
     , doctest
     , entropy
     , fakedata
+    , filepath
     , jose-jwt
     , jsonifier
+    , megaparsec
     , memory
     , mtl
     , network
+    , parser-combinators
+    , protobuf
     , random
+    , regex-tdfa
     , scotty
+    , servant-server
     , template-haskell
     , text
+    , text-display
     , th-lift-instances
     , time
+    , unix
     , uuid
     , validation-selective
+    , wai
     , websockets
     , wuss
   default-language: Haskell2010

@@ -4,3 +4,4 @@ packages:
 - .
 extra-deps:
   - validation-selective-0.2.0.0
+  - text-display-0.0.5.2
