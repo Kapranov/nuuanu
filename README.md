@@ -201,6 +201,291 @@ Testing API token-based authorization system
 27. `integer wraparound`
 28. `test expression syntax and all available operations (v4 blocks)`
 
+A bearer token with offline attenuation and decentralized verification
+-----------------------------------------------------------------------
+
+A bearer token that supports offline attenuation, can be verified by any system
+that knows the root public key, and provides  a flexible authorization language
+based on logic programming.  It is serialized as Protocol Buffers, and designed
+to be small enough for storage in HTTP cookies.
+
+- Datalog: a declarative logic language that works on facts defining data
+  relationship, rules creating more facts if conditions are met, and queries
+  to test such conditions
+- check: a restriction on the kind of operation that can be performed with
+  the token that contains it, represented as a datalog query. For the operation
+  to be valid, all of the checks defined in the token and the authorizer must
+  succeed
+- allow/deny policies: a list of datalog queries that are tested in a sequence
+  until one of them matches. They can only be defined in the authorizer
+- block: a list of datalog facts, rules and checks.
+  The first block is the authority block, used to define the basic rights of a
+  token
+- Verified: a completely parsed biscuit, whose signatures and final proof have
+  been successfully verified
+- Unverified: a completely parsed, whose signatures and final proof have not
+  been verified yet. Manipulating unverified can be useful for generic tooling
+  (eg inspecting without knowing its public key)
+- Authorized: a completely parsed, whose signatures and final proof have been
+  successfully verified and that was authorized in a given context, by running
+  checks and policies.
+- An authorized may carry informations about the successful authorization such
+  as the allow query that matched and the facts generated in the process
+- Authorizer: an authorizer may carry facts, rules, checks and policies.
+
+The token is defined as a series of blocks. The first one, named "authority
+block", contains rights given to the token holder. The following blocks contain
+checks that reduce the token's scope, in the form of logic queries that must
+succeed. The holder of a token can at any time create a new token by adding
+a block with more checks, thus restricting the rights of the new token,
+but they cannot remove existing blocks without invalidating the signature.
+
+The token is protected by public key cryptography operations: the initial
+creator of a token holds a secret key, and any verifier for the token needs
+only to know the corresponding public key. Any attenuation operation will
+employ ephemeral key pairs that are meant to be destroyed as soon as they
+are used.
+
+There is also a sealed version of that token that prevents further attenuation.
+
+The logic language used to design rights, checks, and operation data is a
+variant of datalog that accepts expressions on some data types.
+
+The token is structured as an append-only list of blocks, containing checks,
+and describing authorization properties. As with Macaroons2, an operation
+must comply with all checks in order to be allowed by the token.
+
+Checks are written as queries defined in a flavor of Datalog that supports
+expressions on some data types3, without support for negation.
+This simplifies its implementation and makes the check more precise.
+
+The Datalog program contains facts and rules, which are made of predicates over
+the following types: symbol, variable, integer, string, byte array and date.
+
+- variable
+- integer
+- string
+- byte array
+- date
+- boolean
+- set a deduplicated list of values of any type, except variable or set
+
+While the token does not use a textual representation for storage, we use
+one for parsing and pretty printing of Datalog elements.
+
+A predicate has the form `Predicate(v0, v1, ..., vn)`.
+
+A `fact` is a `predicate` that does not contain any `variable`.
+
+A rule has the form:
+
+```
+Pr(r0, r1, ..., rk) <- P0(t0_1, t0_2, ..., t0_m1), ...,
+Pn(tn_1, tn_2, ..., tn_mn), E0(v0, ..., vi), ..., Ex(vx, ..., vy)
+```
+
+The part of the left of the arrow is called the `head` and on the right,
+the `body`. In a `rule`, each of the `ri` or `ti_j` terms can be of any
+type.
+A `rule` is safe if all of the variables in the head appear somewhere
+in the body.
+
+A `query` is a type of `rule` that has no head.
+
+```
+"facts": [
+  "read(0)",
+  "write(1)",
+  "resource(2)",
+  "operation(3)",
+  "right(4)",
+  "time(5)",
+  "role(6)",
+  "owner(7)",
+  "tenant(8)",
+  "namespace(9)",
+  "user(10)",
+  "team(11)",
+  "service(12)",
+  "admin(13)",
+  "email(14)",
+  "group(15)",
+  "member(16)",
+  "ip_address(17)",
+  "client(18)",
+  "client_ip(19)",
+  "domain(20)",
+  "path(21)",
+  "version(22)",
+  "cluster(23)",
+  "node(24)",
+  "hostname(25)",
+  "nonce(26)",
+  "query(27)"
+]
+```
+
+```
+"rules": [
+  "operation("read") <- operation($any), $any <= $any.contains("read"), $any <= $any.contains("write")",
+  "right("file1", "read") <- resource("file1"), user_id("alice"), owner("alice", "file1")",
+  "right("file1", "read") <- resource("file1"), user_id("alice"), owner("alice", "file1");check if resource("file1"), operation("read"), right("file1", "read");",
+  "valid_date("file1") <- time($now), resource("file1"), $now <= 2030-12-31T12:59:59Z",
+  "valid_date("file1") <- time($now), resource("file1"), $now <= 1999-12-31T12:59:59Z, !["file1"].contains("file1")",
+  "query(1, 2) <- query(1), query(2) trusting ed25519/a060270db7e9c9f06e8f9cc33a64e99f6596af12cb01c4b638df8afc7b642463",
+]
+```
+
+A `check` is a list of `query` for which the token validation will fail
+if it cannot produce any fact. A single query needs to match for the fact
+to succeed. If any of the cheks fails, the entire verification fails.
+
+Since the first block defines the token's rights through facts and rules,
+and later blocks can define their own facts and rules, we must ensure
+the token cannot increase its rights with later blocks.
+
+This is done through execution scopes: by default, a block's rules and
+checks can only apply on facts created in the authority, in the current
+block or in the authorizer. Rules, checks and policies defined in the
+authorizer can only apply on facts created in the authority or in the
+authorizer.
+
+Example:
+
+- the token contains `right("file1", "read")` in the first block
+- the token holder adds a block with the fact `right("file2", "read")`
+- the verifier adds:
+  - `resource("file2")`
+  - `operation("read")`
+  - `check if resource("file1"), operation("read"), right("file1", "read")`
+
+The verifier's check will fail because when it is evaluated, it only sees
+`right("file1", "read")` from the authority block.
+
+Checks are logic queries evaluating conditions on facts. To validate
+an operation, all of a token's checks must succeed.
+
+One block can contain one or more checks.
+
+Their text representation is `check if`, `check all` or `reject if`
+followed by the body of the query. There can be multiple queries inside
+of a check, it will succeed if any of them succeeds (in the case of
+`reject if`, the check will fail if any query matches).
+They are separated by a or token.
+
+- a `check if` query succeeds if it finds one set of facts that matches
+  the body and expressions
+- a `check all` query succeeds if all the sets of facts that match the
+  body also succeed the expression.
+- a `reject if` query succeeds if no set of facts matches the body and
+  expressions
+
+```
+"checks": [
+  "check all operation($op), allowed_operations($allowed), $allowed.contains($op)",
+  "check if !false && true",
+  "check if !false",
+  "check if "aaabde" == "aaa" + "b" + "de"",
+  "check if "aaabde".contains("abd")",
+  "check if "aaabde".matches("a*c?.e")",
+  "check if "abcD12" == "abcD12"",
+  "check if "abcD12".length() == 6",
+  "check if "hello world".starts_with("hello") && "hello world".ends_with("world")",
+  "check if "é".length() == 2",
+  "check if (true || false) && true",
+  "check if 1 != 3",
+  "check if 1 + 2 * 3 - 4 / 2 == 5",
+  "check if 1 < 2",
+  "check if 1 <= 1",
+  "check if 1 <= 2",
+  "check if 1 | 2 ^ 3 == 0",
+  "check if 2 > 1",
+  "check if 2 >= 2",
+  "check if 2019-12-04T09:46:41Z < 2020-12-04T09:46:41Z",
+  "check if 2019-12-04T09:46:41Z <= 2020-12-04T09:46:41Z",
+  "check if 2020-12-04T09:46:41Z == 2020-12-04T09:46:41Z",
+  "check if 2020-12-04T09:46:41Z > 2019-12-04T09:46:41Z",
+  "check if 2020-12-04T09:46:41Z >= 2019-12-04T09:46:41Z",
+  "check if 2022-12-04T09:46:41Z != 2020-12-04T09:46:41Z",
+  "check if 3 == 3",
+  "check if ["abc", "def"].contains("abc")",
+  "check if [1, 2, 3].intersection([1, 2]).contains(1)",
+  "check if [1, 2, 3].intersection([1, 2]).length() == 2",
+  "check if [1, 2] == [1, 2]",
+  "check if [1, 2].contains(2)",
+  "check if [1, 2].contains([2])",
+  "check if [1, 2].intersection([2, 3]) == [2]",
+  "check if [1, 2].union([2, 3]) == [1, 2, 3]",
+  "check if [1, 4] != [1, 2]",
+  "check if [2019-12-04T09:46:41Z, 2020-12-04T09:46:41Z].contains(2020-12-04T09:46:41Z)",
+  "check if [false, true].contains(true)",
+  "check if [hex:12ab, hex:34de].contains(hex:34de)",
+  "check if "abcD12x" != "abcD12"",
+  "check if false == false",
+  "check if false || true",
+  "check if hex:12ab == hex:12ab",
+  "check if hex:12abcd != hex:12ab",
+  "check if must_be_present("hello") or must_be_present("bye")",
+  "check if query(1) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189",
+  "check if query(1, 2) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189, ed25519/a060270db7e9c9f06e8f9cc33a64e99f6596af12cb01c4b638df8afc7b642463",
+  "check if query(2) trusting ed25519/a060270db7e9c9f06e8f9cc33a64e99f6596af12cb01c4b638df8afc7b642463",
+  "check if query(2), query(3) trusting ed25519/a060270db7e9c9f06e8f9cc33a64e99f6596af12cb01c4b638df8afc7b642463",
+  "check if resource("file1")",
+  "check if resource("hello")",
+  "check if resource($0),operation("read"),right($0,"read")",
+  "check if time($time), $time <= 2018-12-20T00:00:00Z",
+  "check if true == true",
+  "check if true trusting previous, ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189",
+  "check if true || -9223372036854775808 - 1 != 0",
+  "check if true || 10000000000 * 10000000000 != 0",
+  "check if true || 9223372036854775807 + 1 != 0",
+  "check if true"
+  ]
+```
+
+The token defines some scopes for facts and rules. The `authority` scope is defined
+in the first block of the token. It provides a set of facts and rules indicating
+the starting rights of the token. `authority` facts can only be defined by authority
+rules.
+The `ambient` scope is provided by the verifier. It contains facts corresponding to
+the query, like which resource we try to access, with which operation (read, write,
+etc), the current time, the source IP, etc. `ambient` facts can only be defined by
+the verifier.
+The `local` scope contains facts specific to one block of the token. Between each
+block evaluation, we do not keep the `local` facts, instead restarting from the
+`authority` and `ambient` facts. Each block can contain caveats, which are `queries`
+that must all succeed for the token to be valid. Additionally, the verifier can have
+its own set of queries that must succeed to validate the token.
+
+This first token defines a list of authority facts giving `read` and `write`
+rights on `file1`, `read` on `file2`. The first check ensures that the operation
+is `read` (and will not allow any other `operation` fact), and then that we have
+the `read` right over the resource.
+The second check ensures that the resource is either `file1` or `file2`.
+The third check ensures that the resource is not `file1`.
+
+```
+authority:
+  right("file1", "read");
+  right("file2", "read");
+  right("file1", "write");
+----------
+Block 1:
+check if
+  resource("file1"),
+  operation("read"),
+  right("file1", "read")
+----------
+Block 2:
+check if
+  resource("file1")
+  or resource("file2")
+----------
+Block 3:
+reject if
+  resource("file1")
+```
+
 Queries API token-based authorization system
 ---------------------------------------------
 
@@ -344,103 +629,7 @@ token_url :: ByteString
 
 - The facts for a new had created block `mkBisque sk` - `[block|user("1234");check if operation("read");|]`
 
-```
-"facts": [
-  "admin(13)",
-  "client(18)",
-  "client_ip(19)",
-  "cluster(23)",
-  "domain(20)",
-  "email(14)",
-  "group(15)",
-  "hostname(25)",
-  "ip_address(17)",
-  "member(16)",
-  "namespace(9)",
-  "node(24)",
-  "nonce(26)",
-  "operation(3)",
-  "owner(7)",
-  "path(21)",
-  "query(27)",
-  "read(0)",
-  "resource(2)",
-  "right(4)",
-  "role(6)",
-  "service(12)",
-  "team(11)",
-  "tenant(8)",
-  "time(5)",
-  "user(10)",
-  "version(22)",
-  "write(1)"
-]
-```
-
 - The checks for a new had created block
-
-```
-"checks": [
-  "check all operation($op), allowed_operations($allowed), $allowed.contains($op)",
-  "check if !false && true",
-  "check if !false",
-  "check if "aaabde" == "aaa" + "b" + "de"",
-  "check if "aaabde".contains("abd")",
-  "check if "aaabde".matches("a*c?.e")",
-  "check if "abcD12" == "abcD12"",
-  "check if "abcD12".length() == 6",
-  "check if "hello world".starts_with("hello") && "hello world".ends_with("world")",
-  "check if "é".length() == 2",
-  "check if (true || false) && true",
-  "check if 1 != 3",
-  "check if 1 + 2 * 3 - 4 / 2 == 5",
-  "check if 1 < 2",
-  "check if 1 <= 1",
-  "check if 1 <= 2",
-  "check if 1 | 2 ^ 3 == 0",
-  "check if 2 > 1",
-  "check if 2 >= 2",
-  "check if 2019-12-04T09:46:41Z < 2020-12-04T09:46:41Z",
-  "check if 2019-12-04T09:46:41Z <= 2020-12-04T09:46:41Z",
-  "check if 2020-12-04T09:46:41Z == 2020-12-04T09:46:41Z",
-  "check if 2020-12-04T09:46:41Z > 2019-12-04T09:46:41Z",
-  "check if 2020-12-04T09:46:41Z >= 2019-12-04T09:46:41Z",
-  "check if 2022-12-04T09:46:41Z != 2020-12-04T09:46:41Z",
-  "check if 3 == 3",
-  "check if ["abc", "def"].contains("abc")",
-  "check if [1, 2, 3].intersection([1, 2]).contains(1)",
-  "check if [1, 2, 3].intersection([1, 2]).length() == 2",
-  "check if [1, 2] == [1, 2]",
-  "check if [1, 2].contains(2)",
-  "check if [1, 2].contains([2])",
-  "check if [1, 2].intersection([2, 3]) == [2]",
-  "check if [1, 2].union([2, 3]) == [1, 2, 3]",
-  "check if [1, 4] != [1, 2]",
-  "check if [2019-12-04T09:46:41Z, 2020-12-04T09:46:41Z].contains(2020-12-04T09:46:41Z)",
-  "check if [false, true].contains(true)",
-  "check if [hex:12ab, hex:34de].contains(hex:34de)",
-  "check if "abcD12x" != "abcD12"",
-  "check if false == false",
-  "check if false || true",
-  "check if hex:12ab == hex:12ab",
-  "check if hex:12abcd != hex:12ab",
-  "check if must_be_present("hello") or must_be_present("bye")",
-  "check if query(1) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189",
-  "check if query(1, 2) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189, ed25519/a060270db7e9c9f06e8f9cc33a64e99f6596af12cb01c4b638df8afc7b642463",
-  "check if query(2) trusting ed25519/a060270db7e9c9f06e8f9cc33a64e99f6596af12cb01c4b638df8afc7b642463",
-  "check if query(2), query(3) trusting ed25519/a060270db7e9c9f06e8f9cc33a64e99f6596af12cb01c4b638df8afc7b642463",
-  "check if resource("file1")",
-  "check if resource("hello")",
-  "check if resource($0),operation("read"),right($0,"read")",
-  "check if time($time), $time <= 2018-12-20T00:00:00Z",
-  "check if true == true",
-  "check if true trusting previous, ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189",
-  "check if true || -9223372036854775808 - 1 != 0",
-  "check if true || 10000000000 * 10000000000 != 0",
-  "check if true || 9223372036854775807 + 1 != 0",
-  "check if true"
-  ]
-```
 
 - The policy for a new had created block
 
