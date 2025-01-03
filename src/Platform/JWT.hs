@@ -22,6 +22,7 @@ import Auth.Bisque ( Bisque
                    , authorizer
                    , block
                    , fromRevocationList
+                   , getRevocationIds
                    , getSingleVariableValue
                    , mkBisque
                    , newSecret
@@ -64,7 +65,9 @@ import Data.Int                                       (Int64)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict                      as Map
 import Data.Text (Text)
-import qualified Data.Text                            as Text (pack)
+import qualified Data.Text                            as Text ( pack
+                                                              , unpack
+                                                              )
 import Data.Text.Display
 import Data.Time
 import Data.Time.Calendar                             (diffDays)
@@ -122,11 +125,7 @@ random_secret :: Int -> IO String
 random_secret num = do
   replicateM num (randomRIO ('a','z'))
 
-buildToken :: SecretKey -> Text -> IO (Bisque Open Verified)
-buildToken sk value = do
-  mkBisque sk [block|user_id(${value});|]
-
--- | 1,2,3. Create a root key (keypair - private/public keys)
+-- | 1,2,3. Create a root key (keypair - private/public keys) - `DONE`
 genKeys :: IO ()
 genKeys = do
   sk <- newSecret
@@ -137,69 +136,75 @@ genKeys = do
   print ("Private key: " <> sk')
   print ("Public  key: " <> pk')
 
--- | 4. Create a token
-myBisque :: SecretKey -> Text -> IO (Bisque Open Verified)
-myBisque sk value = do
-  mkBisque sk [block|user_id(${value});check if operation("read");|]
-
--- | 5. Create an authorize
-myCheck :: Bisque p Verified -> IO Bool
-myCheck bisque = do
+-- | 4. Create a token - `DONE`
+buildToken :: SecretKey -> Text -> IO (Bisque Open Verified)
+buildToken sk value = do
   now <- getCurrentTime
-  result <- authorizeBisque bisque [authorizer|time(${now});operation("read");allow if true;|]
+  let expire = addUTCTime 36000 now
+  mkBisque sk [block|user_id(${value});check if time($time),$time < ${expire};|]
+
+-- | 5. Create an authorize - `DONE`
+myCheck :: Text -> Bisque p Verified -> IO Bool
+myCheck value bisque = do
+  now <- getCurrentTime
+  result <- authorizeBisque bisque [authorizer|time(${now});allow if user_id(${value});|]
   case result of
     Left a  -> pure False
     Right _ -> pure True
 
--- | 6. Attenuate a token
+-- | 6. Attenuate a token - `DONE`
 addTTL :: UTCTime -> Bisque Open c -> IO (Bisque Open c)
-addTTL ttl bisque = addBlock [block|check if time($time), $time < ${ttl};|] bisque
+addTTL ttl bisque = addBlock [block|check if time($time),$time < ${ttl};|] bisque
 
--- | 7. Seal a token
+-- | 7. Seal a token - `DONE`
 sealBisque :: Bisque Open c -> Bisque Sealed c
 sealBisque bisque = seal bisque
 
--- | 8. Reject revoked tokens
-encodeBisque :: SecretKey -> Text -> IO ByteString
-encodeBisque sk value = do
-  let authority = [block|resource(${value});|]
-  bisque <- mkBisque sk authority
-  let block1 = [block|check if current_time($time), $time < 2025-12-25T00:00:00Z;|]
-  newBisque <- addBlock block1 bisque
-  pure $ serialize newBisque
-
-encodeBisque64 :: SecretKey -> Text -> IO ByteString
-encodeBisque64 sk value = do
-  let authority = [block|resource(${value});|]
-  bisque <- mkBisque sk authority
-  let block1 = [block|check if current_time($time), $time < 2025-12-25T00:00:00Z;|]
-  newBisque <- addBlock block1 bisque
-  pure $ serializeB64 newBisque
-
-verification :: PublicKey -> ByteString -> IO Bool
-verification pk serialized = do
-  now <- getCurrentTime
-  bisque <- either (fail . show) pure $ parse pk serialized
-  let authorizer' = [authorizer|current_time(${now});|]
-  result <- authorizeBisque bisque authorizer'
-  case result of
-    Left e  -> print e $> False
-    Right _ -> pure True
-
-verification64 :: PublicKey -> ByteString -> IO Bool
-verification64 pk serialized = do
-  now <- getCurrentTime
-  bisque <- either (fail . show) pure $ parseB64 pk serialized
-  let authorizer' = [authorizer|current_time(${now});|]
-  result <- authorizeBisque bisque authorizer'
-  case result of
-    Left e  -> print e $> False
-    Right _ -> pure True
-
+-- | 8. Reject revoked tokens - `DONE`
 viaParseWith :: Either a b -> IO Bool
 viaParseWith p = do
   case p of
     Left _ -> pure False
+    Right _ -> pure True
+
+encodeBisque :: SecretKey -> Text -> UTCTime -> IO ByteString
+encodeBisque sk value ttl = do
+  now <- getCurrentTime
+  let expire = addUTCTime 36000 now
+  let authority = [block|user_id(${value});check if current_time($time),$time < ${expire};|]
+  bisque <- mkBisque sk authority
+  let block1 = [block|check if current_time($time),$time < ${ttl};|]
+  newBisque <- addBlock block1 bisque
+  pure $ serialize newBisque
+
+encodeBisque64 :: SecretKey -> Text -> UTCTime -> IO ByteString
+encodeBisque64 sk value ttl = do
+  now <- getCurrentTime
+  let expire = addUTCTime 36000 now
+  let authority = [block|user_id(${value});check if current_time($time),$time < ${expire};|]
+  bisque <- mkBisque sk authority
+  let block1 = [block|check if current_time($time),$time < ${ttl};|]
+  newBisque <- addBlock block1 bisque
+  pure $ serializeB64 newBisque
+
+verification :: PublicKey -> ByteString -> Text -> IO Bool
+verification pk serialized value = do
+  now <- getCurrentTime
+  bisque <- either (fail . show) pure $ parse pk serialized
+  let authorizer' = [authorizer|current_time(${now});allow if user_id(${value});|]
+  result <- authorizeBisque bisque authorizer'
+  case result of
+    Left e  -> print e $> False
+    Right _ -> pure True
+
+verification64 :: PublicKey -> ByteString -> Text -> IO Bool
+verification64 pk serialized value = do
+  now <- getCurrentTime
+  bisque <- either (fail . show) pure $ parseB64 pk serialized
+  let authorizer' = [authorizer|current_time(${now});allow if user_id(${value});|]
+  result <- authorizeBisque bisque authorizer'
+  case result of
+    Left e  -> print e $> False
     Right _ -> pure True
 
 parseBisque :: PublicKey -> ByteString -> IO Bool
@@ -237,16 +242,17 @@ parseBisque64' pk encodedBisque revokedIds =  do
     Left _ -> pure False
     Right _ -> pure True
 
--- | 9. Query data from the authorizer
+-- | 9. Query data from the authorizer - `DONE`
 checkBisque :: Bisque proof Verified -> Text -> IO Text
 checkBisque bisque value = do
-  result <- authorizeBisque bisque [authorizer|allow if user_id(${value});|]
+  now <- getCurrentTime
+  result <- authorizeBisque bisque [authorizer|time(${now});allow if user_id(${value});|]
   case result of
-    Left err -> pure "Something wrong!"
+    Left err -> pure "msg#1 The user ID you entered does not exist"
     Right success ->
-      case getSingleVariableValue (queryAuthorizerFacts success [query|user_id(${value})|]) "user_id" of
+      case getSingleVariableValue (queryAuthorizerFacts success [query|user_id($user_id)|]) "user_id" of
         Just userId -> pure userId
-        Nothing -> pure "The user ID you entered does not exist"
+        Nothing -> pure "msg#2 The user ID you entered does not exist"
 
 -- | 10. Inspect a token    - `NONE`
 
