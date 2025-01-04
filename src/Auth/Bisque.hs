@@ -76,6 +76,7 @@ module Auth.Bisque (
                    , query
                    , queryAuthorizerFacts
                    -- * Retrieving information from a bisque
+                   , encodeHex
                    , getRevocationIds
                    , getVerifiedBisquePublicKey
                    ) where

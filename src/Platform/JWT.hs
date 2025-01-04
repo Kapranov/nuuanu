@@ -21,10 +21,13 @@ import Auth.Bisque ( Bisque
                    , authorizeBisque
                    , authorizer
                    , block
+                   , encodeHex
                    , fromRevocationList
                    , getRevocationIds
                    , getSingleVariableValue
+                   , getVerifiedBisquePublicKey
                    , mkBisque
+                   , newPublic
                    , newSecret
                    , parse
                    , parseB64
@@ -62,6 +65,7 @@ import qualified Data.ByteString.Base64 as Base64     ( decode
 import Data.Foldable                                  (Foldable)
 import Data.Functor                                   (($>))
 import Data.Int                                       (Int64)
+import Data.List.NonEmpty                             (toList)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict                      as Map
 import Data.Text (Text)
@@ -79,6 +83,8 @@ import Data.Time.Clock                                ( UTCTime
 import Data.Time.Clock.POSIX                          ( getPOSIXTime
                                                       , utcTimeToPOSIXSeconds
                                                       )
+import Data.UUID
+import GHC.Generics
 import Data.UUID
 import GHC.Generics
 import Platform.HTTP                                  (newUUID)
@@ -125,7 +131,9 @@ random_secret :: Int -> IO String
 random_secret num = do
   replicateM num (randomRIO ('a','z'))
 
--- | 1,2,3. Create a root key (keypair - private/public keys) - `DONE`
+-- | BEGIN Bisque Token Authorization System
+--
+-- | 1,2,3. Create a root key (keypair - private/public keys)
 genKeys :: IO ()
 genKeys = do
   sk <- newSecret
@@ -136,14 +144,14 @@ genKeys = do
   print ("Private key: " <> sk')
   print ("Public  key: " <> pk')
 
--- | 4. Create a token - `DONE`
+-- | 4. Create a token
 buildToken :: SecretKey -> Text -> IO (Bisque Open Verified)
 buildToken sk value = do
   now <- getCurrentTime
   let expire = addUTCTime 36000 now
   mkBisque sk [block|user_id(${value});check if time($time),$time < ${expire};|]
 
--- | 5. Create an authorize - `DONE`
+-- | 5. Create an authorize
 myCheck :: Text -> Bisque p Verified -> IO Bool
 myCheck value bisque = do
   now <- getCurrentTime
@@ -152,15 +160,15 @@ myCheck value bisque = do
     Left a  -> pure False
     Right _ -> pure True
 
--- | 6. Attenuate a token - `DONE`
+-- | 6. Attenuate a token
 addTTL :: UTCTime -> Bisque Open c -> IO (Bisque Open c)
 addTTL ttl bisque = addBlock [block|check if time($time),$time < ${ttl};|] bisque
 
--- | 7. Seal a token - `DONE`
+-- | 7. Seal a token
 sealBisque :: Bisque Open c -> Bisque Sealed c
 sealBisque bisque = seal bisque
 
--- | 8. Reject revoked tokens - `DONE`
+-- | 8. Reject revoked tokens
 viaParseWith :: Either a b -> IO Bool
 viaParseWith p = do
   case p of
@@ -229,8 +237,11 @@ parseBisque64 pk encodedBisque =  do
   result <- parseWith parsingOptions encodedBisque
   viaParseWith result
 
+pullRevocationIds :: (Bisque Open Verified) -> [Text]
+pullRevocationIds bisque = [encodeHex x | x <- toList (getRevocationIds bisque)]
+
 parseBisque64' :: (Foldable t) => PublicKey -> ByteString -> t ByteString -> IO Bool
-parseBisque64' pk encodedBisque revokedIds =  do
+parseBisque64' pk encodedBisque revokedIds = do
   let parsingOptions =
         ParserConfig
           { encoding = UrlBase64
@@ -242,7 +253,7 @@ parseBisque64' pk encodedBisque revokedIds =  do
     Left _ -> pure False
     Right _ -> pure True
 
--- | 9. Query data from the authorizer - `DONE`
+-- | 9. Query data from the authorizer
 checkBisque :: Bisque proof Verified -> Text -> IO Text
 checkBisque bisque value = do
   now <- getCurrentTime
@@ -255,6 +266,8 @@ checkBisque bisque value = do
         Nothing -> pure "msg#2 The user ID you entered does not exist"
 
 -- | 10. Inspect a token    - `NONE`
+--
+-- | END Bisque Token Authorization System
 
 nanosSinceEpoch :: UTCTime -> Int64
 nanosSinceEpoch =

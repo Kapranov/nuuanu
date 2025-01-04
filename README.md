@@ -221,7 +221,7 @@ to be small enough for storage in HTTP cookies.
 - block: a list of datalog facts, rules and checks.
   The first block is the authority block, used to define the basic rights of a
   token
-- Verified: a completely parsed biscuit, whose signatures and final proof have
+- Verified: a completely parsed bisque, whose signatures and final proof have
   been successfully verified
 - Unverified: a completely parsed, whose signatures and final proof have not
   been verified yet. Manipulating unverified can be useful for generic tooling
@@ -494,6 +494,104 @@ HexKey - `rootPublicKey`  `1055c750b1a1505937af1537c626ba3263995c33a64758aaafb12
 RawKey - `rootPrivateKey` `\153\232{\SO\145XS\RS\238\181\ETX\255\NAK&n+#\194\162P{\DC3\140\157\ESC\US*\180X\223-a`
 RawKey - `rootPublicKey`  `\DLEU\199P\177\161PY7\175\NAK7\198&\186\&2c\153\\3\166GX\170\175\177'[\ETX\DC2\226\132`
 
+### BEGIN
+
+```
+λ :load src/Platform/JWT.hs
+
+λ genKeys
+Generating a new random keypair
+"Private key: 99e87b0e9158531eeeb503ff15266e2b23c2a2507b138c9d1b1f2ab458df2d61"
+"Public  key: 1055c750b1a1505937af1537c626ba3263995c33a64758aaafb1275b0312e284"
+
+λ sk <- newSecret
+λ :t sk
+sk :: SecretKey
+
+λ pk = toPublic sk
+λ :t pk
+pk :: PublicKey
+
+λ new_pk <- newPublic
+PublicKey "\DLEU\199P\177\161PY7\175\NAK7\198&\186\&2c\153\\3\166GX\170\175\177'[\ETX\DC2\226\132"
+λ :t new_pk
+new_pk :: PublicKey
+
+λ value = Text.pack ("1234")
+λ new_value = Text.pack ("123456789")
+λ now <- getCurrentTime
+λ ttl = addUTCTime 36000 now
+
+λ token <- buildToken sk value
+λ :t token
+token :: Bisque Open Verified
+
+λ myCheck value token
+True
+
+λ myCheck new_value token
+False
+
+λ token_add_blocked <- addTTL ttl token
+λ :t token_add_blocked
+token_add_blocked :: Bisque Open Verified
+
+λ myCheck value token_add_blocked
+True
+
+λ new_ttl = addUTCTime 360 now
+λ token_add_blocked <- addTTL new_ttl token
+λ myCheck value token_add_blocked
+False
+
+λ token_lock = sealBisque token
+λ :t token_lock
+token_lock :: Bisque Sealed Verified
+
+λ checkBisque token value
+"1234"
+
+λ checkBisque token new_value
+"msg#1 The user ID you entered does not exist"
+
+λ token_enc <- encodeBisque sk value ttl
+λ :t token_enc
+token_enc :: ByteString
+
+λ token_enc64 <- encodeBisque64 sk value ttl
+λ :t token_enc64
+token_enc64 :: ByteString
+
+λ verification pk token_enc value
+True
+λ verification64 pk token_enc64 value
+True
+
+λ verification pk token_enc new_value
+ResultError (NoPoliciesMatched [])
+False
+λ verification64 pk token_enc64 new_value
+ResultError (NoPoliciesMatched [])
+False
+
+λ parseBisque pk token_enc
+True
+λ parseBisque64 pk token_enc64
+True
+
+λ revocationIds = toList $ getRevocationIds token
+
+λ pullRevocationIds token
+["fb58f5b7d5a282056042cfffe6b72d82e322be229eb2585301cb42f09c32ccca64209ea1b4e547a69c83908a093df857ab2623762338c624bd0570b71373f50f"]
+
+λ parseBisque64' pk token_enc64 revocationIds
+True
+λ new_token_enc64 <- encodeBisque64 sk value new_ttl
+λ parseBisque64' pk new_token_enc64 revocationIds
+False
+```
+### END
+
 1. Create a root key (keypair - private/public keys)
 
 - Hex keys
@@ -719,7 +817,7 @@ Bisque {rootKeyId = Nothing, symbols = Symbols {getSymbols = fromList [(0,"read"
 check if operation("read")),Signature "u\252\138\CAN\223\142\169\143\240\249\196\\V\130g\208\157U\139\STX\147O\ACK\GS%\r\176\222\253\226\192'\153\166ef\166\171\250\&2i\222\147\172\SOHg\238\FS\242\STXO\248\201G\171\253\211\184\153\145\b\141\146\t",PublicKey "W\252\139\&3\\X\133I\144D\214\169\248\179\178K\192G\FS\187v\183,\DC1\153#'5\197Q\203\DEL"), blocks = [], proof = Sealed (Signature "c\164\n\222\&3\NUL\ESC\208\SI\171sk\150Z\214\234\&7\225\139\176;\SYN\133\203\217\150\t\209\177\&0Hk\CAN(h\152\n\191\NUL\206\194\220\179\226\161\DC4AT(z\a\247- \153P_\135is\193\180L\NUL"), proofCheck = Verified (PublicKey "\144\239)\202\vx\165;\STXZ7 \132\142\146)V\195\235c\174\156\&1q\"\137{\202\143\149=\236")}
 ```
 
-7. `DONE` - Reject revoked tokens
+7. Reject revoked tokens
 
 ```haskell
 λ token_url <- serialize token
@@ -736,13 +834,12 @@ False
 λ
 ```
 
-8. `DONE` - Query data from the authorizer
+8. Query data from the authorizer
 
 ```haskell
-λ
 ```
 
-9. `DONE` - Inspect a token
+9. Inspect a token
 
 ```haskell
 λ checkBisque token
@@ -852,7 +949,7 @@ Requires two things:
 Creating a private key:
 
 ```
-❯ biscuit keypair
+❯ bisque keypair
 Generating a new random keypair
 Private key: 473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97
 Public key: 41e77e842e5c952a29233992dc8ebbedd2d83291a89bb0eec34457e723a69526
@@ -882,7 +979,7 @@ attribute (`"1234"`). Facts can have several attributes, of various types
 Now we have a private key and an authority block, we can generate:
 
 ```
-❯ biscuit generate --private-key 473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97 authority.biscuit-datalog
+❯ bisque generate --private-key 473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97 authority.bisque-datalog
 En0KEwoEMTIzNBgDIgkKBwgKEgMYgAgSJAgAEiBw-OHV3egI0IVjiC1vdB7WZ__t0FCvB2s-81PexdwuqxpAolMr9XDP7T44qgdXxtumc2P3O93pCHaGSuBUs3_f8nsQJ7NU6PdkujZIMStzEJ36CDnxawSZjUAKoTO-a1cCDSIiCiBPsG53WHcpxeydjSpFYNYnvPAeM1tVBvOEG9SQgMrzbw==
 ```
 
@@ -890,8 +987,8 @@ En0KEwoEMTIzNBgDIgkKBwgKEgMYgAgSJAgAEiBw-OHV3egI0IVjiC1vdB7WZ__t0FCvB2s-81Pexdwu
 You can inspect the generated:
 
 ```
-❯ biscuit inspect -
-Please input a base64-encoded biscuit, followed by <enter> and ^D
+❯ bisque inspect -
+Please input a base64-encoded bisque, followed by <enter> and ^D
 En0KEwoEMTIzNBgDIgkKBwgKEgMYgAgSJAgAEiBw-OHV3egI0IVjiC1vdB7WZ__t0FCvB2s-81PexdwuqxpAolMr9XDP7T44qgdXxtumc2P3O93pCHaGSuBUs3_f8nsQJ7NU6PdkujZIMStzEJ36CDnxawSZjUAKoTO-a1cCDSIiCiBPsG53WHcpxeydjSpFYNYnvPAeM1tVBvOEG9SQgMrzbw==
 Authority block:
 == Datalog ==
@@ -950,8 +1047,8 @@ all together, then we know the request can go through.
 With all that done, we can go ahead and check:
 
 ```
-❯ biscuit inspect - --verify-with-file authorizer.datalog --public-key 41e77e842e5c952a29233992dc8ebbedd2d83291a89bb0eec34457e723a69526
-Please input a base64-encoded biscuit, followed by <enter> and ^D
+❯ bisque inspect - --verify-with-file authorizer.datalog --public-key 41e77e842e5c952a29233992dc8ebbedd2d83291a89bb0eec34457e723a69526
+Please input a base64-encoded bisque, followed by <enter> and ^D
 En0KEwoEMTIzNBgDIgkKBwgKEgMYgAgSJAgAEiBw-OHV3egI0IVjiC1vdB7WZ__t0FCvB2s-81PexdwuqxpAolMr9XDP7T44qgdXxtumc2P3O93pCHaGSuBUs3_f8nsQJ7NU6PdkujZIMStzEJ36CDnxawSZjUAKoTO-a1cCDSIiCiBPsG53WHcpxeydjSpFYNYnvPAeM1tVBvOEG9SQgMrzbw==
 Authority block:
 == Datalog ==
@@ -986,15 +1083,15 @@ than `2021-12-20T00:00:00Z`.
 We can create a new token by appending this block to our existing token:
 
 ```
-❯ biscuit attenuate - --block-file 'block1.biscuit-datalog'
-Please input a base64-encoded biscuit, followed by <enter> and ^D
+❯ bisque attenuate - --block-file 'block1.bisque-datalog'
+Please input a base64-encoded bisque, followed by <enter> and ^D
 En0KEwoEMTIzNBgDIgkKBwgKEgMYgAgSJAgAEiBw-OHV3egI0IVjiC1vdB7WZ__t0FCvB2s-81PexdwuqxpAolMr9XDP7T44qgdXxtumc2P3O93pCHaGSuBUs3_f8nsQJ7NU6PdkujZIMStzEJ36CDnxawSZjUAKoTO-a1cCDSIiCiBPsG53WHcpxeydjSpFYNYnvPAeM1tVBvOEG9SQgMrzbw==
 En0KEwoEMTIzNBgDIgkKBwgKEgMYgAgSJAgAEiBw-OHV3egI0IVjiC1vdB7WZ__t0FCvB2s-81PexdwuqxpAolMr9XDP7T44qgdXxtumc2P3O93pCHaGSuBUs3_f8nsQJ7NU6PdkujZIMStzEJ36CDnxawSZjUAKoTO-a1cCDRqUAQoqGAMyJgokCgIIGxIGCAUSAggFGhYKBAoCCAUKCAoGIICP_40GCgQaAggCEiQIABIgkzpUMZubXcd8K7mWNchjb0D2QXeYoWtlZw2KMryKubUaQOFlx4iPKUqKeJrEH4MKO7tjM3H9z1rYbOj-gKGTtYJ4bac0kIoWl9v_7q7qN7fQJJgj0IU4jx4_QhxIk9SeigMiIgogqvHkuXrYkoMRvKgT9zNV4BEKC5W2K8L7NcGiX44ASwE=
 ```
 
 ```
-❯ biscuit inspect - --verify-with-file authorizer.datalog --public-key 41e77e842e5c952a29233992dc8ebbedd2d83291a89bb0eec34457e723a69526
-Please input a base64-encoded biscuit, followed by <enter> and ^D
+❯ bisque inspect - --verify-with-file authorizer.datalog --public-key 41e77e842e5c952a29233992dc8ebbedd2d83291a89bb0eec34457e723a69526
+Please input a base64-encoded bisque, followed by <enter> and ^D
 En0KEwoEMTIzNBgDIgkKBwgKEgMYgAgSJAgAEiBw-OHV3egI0IVjiC1vdB7WZ__t0FCvB2s-81PexdwuqxpAolMr9XDP7T44qgdXxtumc2P3O93pCHaGSuBUs3_f8nsQJ7NU6PdkujZIMStzEJ36CDnxawSZjUAKoTO-a1cCDRqUAQoqGAMyJgokCgIIGxIGCAUSAggFGhYKBAoCCAUKCAoGIICP_40GCgQaAggCEiQIABIgkzpUMZubXcd8K7mWNchjb0D2QXeYoWtlZw2KMryKubUaQOFlx4iPKUqKeJrEH4MKO7tjM3H9z1rYbOj-gKGTtYJ4bac0kIoWl9v_7q7qN7fQJJgj0IU4jx4_QhxIk9SeigMiIgogqvHkuXrYkoMRvKgT9zNV4BEKC5W2K8L7NcGiX44ASwE=
 Authority block:
 == Datalog ==
