@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE QuasiQuotes           #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# OPTIONS_GHC -Wall              #-}
 module Platform.JWT ( main
                     , maxSaveFileSize
@@ -11,7 +12,6 @@ module Platform.JWT ( main
 import Auth.Bisque ( Bisque
                    , BisqueEncoding (RawBytes, UrlBase64)
                    , Open
-                   , OpenOrSealed
                    , ParserConfig (..)
                    , PublicKey
                    , Sealed
@@ -49,12 +49,7 @@ import Auth.Bisque ( Bisque
                    )
 
 import "crypton" Crypto.Random                        (getRandomBytes)
-import Control.Monad                                  ( liftM,
-                                                      replicateM
-                                                      )
-import Control.Monad.Except                           ( MonadError
-                                                      , throwError
-                                                      )
+import Control.Monad                                  (replicateM)
 import Data.ByteString                                (ByteString)
 import qualified Data.ByteString        as ByteString ( readFile
                                                       , writeFile
@@ -62,35 +57,20 @@ import qualified Data.ByteString        as ByteString ( readFile
 import qualified Data.ByteString.Base64 as Base64     ( decode
                                                       , encode
                                                       )
-import Data.Foldable                                  (Foldable)
 import Data.Functor                                   (($>))
 import Data.Int                                       (Int64)
 import Data.List.NonEmpty                             (toList)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict                      as Map
 import Data.Text (Text)
-import qualified Data.Text                            as Text ( pack
-                                                              , unpack
-                                                              )
-import Data.Text.Display
+import qualified Data.Text                            as Text (pack)
 import Data.Time
-import Data.Time.Calendar                             (diffDays)
-import Data.Time.Clock                                ( UTCTime
-                                                      , getCurrentTime
-                                                      , nominalDiffTimeToSeconds
-                                                      , utctDay
-                                                      )
 import Data.Time.Clock.POSIX                          ( getPOSIXTime
                                                       , utcTimeToPOSIXSeconds
                                                       )
 import Data.UUID
-import GHC.Generics
-import Data.UUID
-import GHC.Generics
 import Platform.HTTP                                  (newUUID)
-import Prelude hiding (lookup)
-import System.OsPath.Posix
-import System.Posix.Files.PosixString
+import Prelude hiding                                 (lookup, pred)
 import System.Random
 -- import Jose.Jwt
 
@@ -157,7 +137,7 @@ myCheck value bisque = do
   now <- getCurrentTime
   result <- authorizeBisque bisque [authorizer|time(${now});allow if user_id(${value});|]
   case result of
-    Left a  -> pure False
+    Left _  -> pure False
     Right _ -> pure True
 
 -- | 6. Attenuate a token
@@ -259,10 +239,10 @@ checkBisque bisque value = do
   now <- getCurrentTime
   result <- authorizeBisque bisque [authorizer|time(${now});allow if user_id(${value});|]
   case result of
-    Left err -> pure "msg#1 The user ID you entered does not exist"
+    Left _ -> pure "msg#1 The user ID you entered does not exist"
     Right success ->
       case getSingleVariableValue (queryAuthorizerFacts success [query|user_id($user_id)|]) "user_id" of
-        Just userId -> pure userId
+        Just idx -> pure idx
         Nothing -> pure "msg#2 The user ID you entered does not exist"
 
 -- | 10. Inspect a token    - `NONE`
@@ -272,6 +252,30 @@ checkBisque bisque value = do
 nanosSinceEpoch :: UTCTime -> Int64
 nanosSinceEpoch =
   floor . (1e9 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
+
+data MyDay = Monday | Tuesday | Wednesday | Thursday | Friday | Saturday | Sunday
+  deriving (Eq, Show, Enum)
+
+getDayFromTimestamp :: Integer -> MyDay
+getDayFromTimestamp ts = getDayFromIndex .
+                            fromIntegral .
+                            calculateDayIndex .
+                            calculateElapsedDays $
+                            ts
+
+getDayFromIndex :: Int -> MyDay
+getDayFromIndex x
+  | x < 0 || x > 6 = error "Index must be between 0 and 6"
+  | otherwise = toEnum x :: MyDay
+
+getCurrentTimestamp :: IO Integer
+getCurrentTimestamp = (round `fmap` getPOSIXTime)
+
+calculateElapsedDays :: Integer -> Integer
+calculateElapsedDays ts = ts `div` 86400
+
+calculateDayIndex :: Integer -> Integer
+calculateDayIndex x = (x + 3) `mod` 7
 
 data User = User
   { userId        :: Int
@@ -328,6 +332,22 @@ getUserNum num | num < 9 =
     (_email,UserId uuid) -> Just uuid
 getUserNum _ = Nothing
 
+getUserNum' :: Int -> Maybe UUID
+getUserNum' num | num < 9 =
+                  case (Map.elemAt num getUsers) of
+                    (_email, UserId uuid) -> Just uuid
+                | otherwise = Nothing
+
+ifMaybe :: (Int -> Bool) -> Int -> Maybe String
+ifMaybe pred num =
+  if pred num
+  then (getUserNum' num) >>= return . show
+  else Nothing
+
+fromIfMaybe :: a -> Maybe a -> a
+fromIfMaybe def Nothing = def
+fromIfMaybe _ (Just n) = n
+
 admin :: UserId
 admin = UserId $ read $ show $ idx_userId !! 0
 
@@ -361,33 +381,31 @@ readPathSecret path = do
 
 main :: IO ()
 main = do
-  -- BEGIN Dates and Times
+  -- | BEGIN Dates and Times
   getCurrentTime >>= return.(formatTime defaultTimeLocale "%D %H:%M:%S") >>= putStrLn.show
   let epoch = read "1970-01-01 00:00:00 UTC"
   getCurrentTime >>= print
   now <- getCurrentTime :: IO UTCTime
-  print (nanosSinceEpoch now)
+  print $ nanosSinceEpoch now
   putStrLn ("The time is " ++ show now)
   print $ (utctDay now) `diffDays` (utctDay epoch)
   today <- fmap utctDay getCurrentTime
   let (year, _, _) = toGregorian today
   let days = diffDays today (fromGregorian year 0 0)
   putStrLn $ "Today is day " ++ show days ++ " of the current year"
-  -- Generate custom secretKey
-  genChar <- random_char
-  genSecret <- random_secret 64
-  print genChar
-  print genSecret
-  -- | Bisque - create a key pair 'SecretKey' and 'PublicKey'
+  -- | Generate custom secretKey
+  print $ saveKeyLength
+  print $ maxSaveFileSize
+  print =<< random_char
+  print =<< random_secret 64
+  -- | BEGIN Bisque - create a key pair 'SecretKey' and 'PublicKey'
   let userUUID = toText $ newUUID !! 0
   sk <- newSecret
   token <- buildToken sk userUUID
   let pk = toPublic sk
-  let bisqueBs = serialize token
+  print $ serialize token
+  checkBisque token userUUID >>= print
   result <- authorizeBisque token [authorizer|allow if user_id(${userUUID});|]
-  print bisqueBs
-  res <- checkBisque token userUUID
-  print res
   putStrLn $ "---| BEGIN singleBlock |-------------------------------------"
   print result
   putStrLn $ "---| END singleBlock   |-------------------------------------"
@@ -395,12 +413,73 @@ main = do
   print $ serializeSecretKeyHex sk
   -- | Will print the hex-encoded public key
   print $ serializePublicKeyHex pk
+  print $ serializeSecretKey sk
+  print $ serializePublicKey pk
+  parsedSk <- parseSecretKey <$> serializeSecretKey <$> newSecret
+  case parsedSk of
+    Just _ -> return ()
+    Nothing -> return ()
+  parsedSkHex <- parseSecretKeyHex <$> serializeSecretKey <$> newSecret
+  case parsedSkHex of
+    Just _ -> return ()
+    Nothing -> return ()
+  parsedPk <- parsePublicKey <$> serializePublicKey <$> toPublic <$> newSecret
+  case parsedPk of
+    Just _ -> return ()
+    Nothing -> return ()
+  parsedPkHex <- parsePublicKeyHex <$> serializePublicKey <$> toPublic <$> newSecret
+  case parsedPkHex of
+    Just _ -> return ()
+    Nothing -> return ()
   -- | The current time creates
-  currentTime <- liftM round getPOSIXTime
-  let expirationTime = currentTime + 864000
+  current <- truncate @_ @Int64 . (* 1000) <$> getPOSIXTime
+  let expirationTime = current + 864000
   -- | Will print round up numbers to integer
   print $ show $ expirationTime
-  -- let claims = mempty { unregisteredClaims = [("sub", String "public_key"), ("exp", Number $ fromIntegral expirationTime)] }
-  -- let key = Secret "private_key"
-  -- let token = encode [HS256] key claims
-  -- print token
+  ts <- getCurrentTimestamp
+  print $ getDayFromTimestamp ts
+  -- | BEGIN Token
+  genKeys
+  newPublic >>= print
+  let val = Text.pack ("1234")
+  let new_val = Text.pack ("123456789")
+  let ttl = addUTCTime 36000 now
+  bisque <- buildToken sk val
+  print $ serializePublicKey $ getVerifiedBisquePublicKey bisque
+  print $ serializePublicKeyHex  $ getVerifiedBisquePublicKey bisque
+  myCheck val bisque >>= print
+  myCheck new_val bisque >>= print
+  bisque_add_blocked <- addTTL ttl bisque
+  myCheck val bisque_add_blocked >>= print
+  let new_ttl = addUTCTime 360 now
+  token_add_blocked <- addTTL new_ttl token
+  myCheck val token_add_blocked >>= print
+  print $ sealBisque bisque
+  checkBisque bisque val >>= print
+  checkBisque token new_val >>= print
+  token_enc <- encodeBisque sk val ttl
+  token_enc64 <- encodeBisque64 sk val ttl
+  verification pk token_enc val >>= print
+  verification64 pk token_enc64 val >>= print
+  verification pk token_enc new_val >>= print
+  verification64 pk token_enc64 new_val >>= print
+  parseBisque pk token_enc >>= print
+  parseBisque64 pk token_enc64 >>= print
+  let revocationIds = toList $ getRevocationIds bisque
+  print $ pullRevocationIds bisque
+  parseBisque64' pk token_enc64 revocationIds >>= print
+  -- | BEGIN
+  print admin
+  print =<< generateSecret
+  print allUsers
+  putStrLn $ getUserId "admin@example.org"
+  case (getUserNum 0) of
+    Just _ -> return ()
+    Nothing -> return ()
+  case (ifMaybe (const True) 0) of
+    Just idx -> putStrLn $ "user_id: " ++ idx
+    Nothing -> return ()
+  print $ fromIfMaybe "number is out of range" $ ifMaybe (const True) 9
+  secret <- readSecret <$> writeSecret >>= \pwd -> pwd
+  writePathSecret "/tmp/secrets" secret
+  readPathSecret "/tmp/secrets" >>= print
