@@ -21,6 +21,7 @@ import Auth.Bisque ( Bisque
                    , authorizeBisque
                    , authorizer
                    , block
+                   , blockContext
                    , encodeHex
                    , fromRevocationList
                    , getRevocationIds
@@ -130,6 +131,14 @@ buildToken sk value = do
   now <- getCurrentTime
   let expire = addUTCTime 36000 now
   mkBisque sk [block|user_id(${value});check if time($time),$time < ${expire};|]
+
+buildTokenAddContext :: SecretKey -> Text -> Text -> IO (Bisque Open Verified)
+buildTokenAddContext sk value content = do
+  now <- getCurrentTime
+  let expire = addUTCTime 36000 now
+  let context = blockContext content
+  let authority = [block|user_id(${value});check if time($time),$time < ${expire};|] <> context
+  mkBisque sk authority
 
 -- | 5. Create an authorize
 myCheck :: Text -> Bisque p Verified -> IO Bool
@@ -246,7 +255,6 @@ checkBisque bisque value = do
         Nothing -> pure "msg#2 The user ID you entered does not exist"
 
 -- | 10. Inspect a token    - `NONE`
---
 -- | END Bisque Token Authorization System
 
 nanosSinceEpoch :: UTCTime -> Int64
@@ -409,6 +417,8 @@ main = do
   putStrLn $ "---| BEGIN singleBlock |-------------------------------------"
   print result
   putStrLn $ "---| END singleBlock   |-------------------------------------"
+  -- | Will be added a new context value 'valid_day'
+  _ <- buildTokenAddContext sk userUUID "valid_day"
   -- | Will print the hex-encoded secret key
   print $ serializeSecretKeyHex sk
   -- | Will print the hex-encoded public key
