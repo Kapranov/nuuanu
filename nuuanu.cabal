@@ -40,6 +40,7 @@ library
       Auth.Bisque.Timer
       Auth.Bisque.Token
       Auth.Bisque.Utils
+      Auth.Kailua.Utils
       Criterion.Fibber
       Criterion.Overhead
       Data.Algebraic.Custom

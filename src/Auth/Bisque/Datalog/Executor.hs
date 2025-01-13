@@ -193,30 +193,7 @@ factMatchesPredicate Predicate{name = predicateName, terms = predicateTerms }
   in if namesMatch && lengthsMatch
      then (factOrigins,) . mergeBindings <$> allMatches
      else Nothing
---
--- /home/kapranov/Projects/bin/haskel-projects/nuuanu/src/Auth/Bisque/Datalog/Executor.hs:199:20: warning: [GHC-30606] [-Wredundant-constraints]
---     • Redundant constraint: Ord a
---       In the type signature for:
---            mapMaybeS :: forall a b.
---                         (Ord a, Ord b) =>
---                         (a -> Maybe b) -> Set a -> Set b
---     • In the expression:
---         let
---           mapMaybeS :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
---           mapMaybeS f = foldMap (foldMap Set.singleton . f)
---           keepFacts :: Predicate -> Set (Scoped Bindings)
---           ....
---         in keepFacts <$> predicates
---       In an equation for ‘getCandidateBindings’:
---           getCandidateBindings facts predicates
---             = let
---                 mapMaybeS :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
---                 mapMaybeS f = foldMap (foldMap Set.singleton . f)
---                 ....
---               in keepFacts <$> predicates
---     |
--- 199 |   let mapMaybeS :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
---
+
 getCandidateBindings :: Set (Scoped Fact) -> [Predicate] -> [Set (Scoped Bindings)]
 getCandidateBindings facts predicates =
   let mapMaybeS :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b

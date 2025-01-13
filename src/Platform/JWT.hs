@@ -387,8 +387,17 @@ readPathSecret path = do
     Left err -> error err
     Right bytes -> return $ Secret bytes
 
+data Optional a = Only a | Empty deriving Show
+
+getVal :: Int -> Optional Int
+getVal num = Only num
+
 main :: IO ()
 main = do
+  -- | Customer Maybe function
+  case getVal 23 of
+    Only val -> putStrLn $ show val
+    Empty -> putStrLn "Something went wrong!"
   -- | BEGIN Dates and Times
   getCurrentTime >>= return.(formatTime defaultTimeLocale "%D %H:%M:%S") >>= putStrLn.show
   let epoch = read "1970-01-01 00:00:00 UTC"
