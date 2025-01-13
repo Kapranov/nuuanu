@@ -8,7 +8,6 @@
 --  Copyright  : updated © Oleg G.Kapranov, 2025
 --  License    : MIT
 --  Maintainer : lugatex@yahoo.com
-
 module Auth.Kailua.Types ( Algorithm (..)
                          , BinaryKind (..)
                          , Block (..)
@@ -40,7 +39,6 @@ module Auth.Kailua.Types ( Algorithm (..)
 import Data.ByteString      (ByteString)
 import Data.Int
 import Data.ProtocolBuffers
-import Data.Serialize
 import Data.Text
 import GHC.Generics         (Generic)
 
