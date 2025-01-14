@@ -94,3 +94,6 @@ tests:
     - nuuanu
     - hspec
     - QuickCheck
+    - bytestring
+    - tasty
+    - tasty-hunit

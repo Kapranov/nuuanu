@@ -9,6 +9,9 @@ stack_yaml = STACK_YAML="stack.yaml"
 build:
 	$(V)$(STACK) build
 
+build_test:
+	$(V)$(STACK) build --test
+
 build-dirty:
 	$(V)$(STACK) build --ghc-options=-fforce-recomp $(package)
 
@@ -39,7 +42,11 @@ git_vtree:
 	$(V)$(GIT) vtree
 
 start:
-	$(V)$(STACK) exec ghci
+	$(V)$(STACK) ghci
+
+start_test:
+	$(V)$(STACK) ghci --ghci-options -itest nuuanu:nuuanu-test
+
 
 no_prelude:
 	$(V)ghci -XNoImplicitPrelude

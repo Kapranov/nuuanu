@@ -1,9 +1,17 @@
 import Test.Hspec
 import Test.QuickCheck
+import Test.Tasty
 import Control.Exception (evaluate)
+import qualified Spec.Auth.Kailua.Crypto as Crypto
 
 main :: IO ()
-main = hspec $ do
+main = do
+  defaultMain $ testGroup "nuuanu"
+    [Crypto.specs]
+  hspec spec
+
+spec :: Spec
+spec = do
   describe "Prelude.head" $ do
     it "returns the first element of a list" $ do
       head [23 ..] `shouldBe` (23 :: Int)
