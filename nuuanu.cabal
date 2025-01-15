@@ -41,6 +41,7 @@ library
       Auth.Bisque.Token
       Auth.Bisque.Utils
       Auth.Kailua.Crypto
+      Auth.Kailua.Datalog.AST
       Auth.Kailua.Proto
       Auth.Kailua.Types
       Auth.Kailua.Utils

@@ -2,6 +2,7 @@ import Test.Hspec
 import Test.QuickCheck
 import Test.Tasty
 import Control.Exception (evaluate)
+
 import qualified Spec.Auth.Kailua.Crypto as Crypto
 
 main :: IO ()
