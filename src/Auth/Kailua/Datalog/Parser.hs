@@ -1,7 +1,4 @@
 {-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DerivingStrategies    #-}
-{-# LANGUAGE KindSignatures        #-}
-{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
@@ -9,6 +6,13 @@
 {-# LANGUAGE TemplateHaskellQuotes #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeApplications      #-}
+{-|
+  Module      : Auth.Kailua.Datalog.Parser
+  Copyright   : updated © Oleg G.Kapranov, 2025
+  License     : MIT
+  Maintainer  : lugatex@yahoo.com
+  The Datalog Parser
+-}
 module Auth.Kailua.Datalog.Parser ( authorizer
                                   , authorizerParser
                                   , block
@@ -71,6 +75,10 @@ import Auth.Kailua.Datalog.AST                  ( Authorizer
                                                 , substituteAuthorizer
                                                 , substituteBlock
                                                 )
+import Auth.Kailua.Datalog.Types                ( Parser
+                                                , SemanticError (..)
+                                                , Span
+                                                )
 import Auth.Kailua.Utils                        (decodeHex)
 import Control.Monad                            (join)
 import qualified Control.Monad.Combinators.Expr as Expr
@@ -82,7 +90,6 @@ import Data.Either                              (partitionEithers)
 import Data.Function                            ((&))
 import Data.Int                                 (Int64)
 import Data.List.NonEmpty                       (NonEmpty)
-import qualified Data.List.NonEmpty             as NE
 import Data.Map.Strict                          (Map)
 import Data.Maybe                               (isJust)
 import Data.Set                                 (Set)
@@ -102,29 +109,6 @@ import Validation                               ( Validation (..)
                                                 )
 import qualified Text.Megaparsec.Char           as C
 import qualified Text.Megaparsec.Char.Lexer     as L
-
-type Parser = Parsec SemanticError Text
-type Span = (Int, Int)
-
-data SemanticError =
-    VarInFact Span
-  | VarInSet  Span
-  | NestedSet Span
-  | InvalidBs Text Span
-  | InvalidPublicKey Text Span
-  | UnboundVariables (NonEmpty Text) Span
-  | PreviousInAuthorizer Span
-  deriving stock (Eq, Ord)
-
-instance ShowErrorComponent SemanticError where
-  showErrorComponent = \case
-    VarInFact _            -> "Variables can't appear in a fact"
-    VarInSet  _            -> "Variables can't appear in a set"
-    NestedSet _            -> "Sets cannot be nested"
-    InvalidBs e _          -> "Invalid bytestring literal: " <> T.unpack e
-    InvalidPublicKey e _   -> "Invalid public key: " <> T.unpack e
-    UnboundVariables e _   -> "Unbound variables: " <> T.unpack (T.intercalate ", " $ NE.toList e)
-    PreviousInAuthorizer _ -> "'previous' can't appear in an authorizer scope"
 
 l :: Parser a -> Parser a
 l = L.lexeme $ L.space C.space1 (L.skipLineComment "//") empty

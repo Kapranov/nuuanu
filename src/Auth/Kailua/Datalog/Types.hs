@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures             #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
@@ -19,7 +20,7 @@
   Copyright   : updated © Oleg G.Kapranov, 2025
   License     : MIT
   Maintainer  : lugatex@yahoo.com
-  The Datalog elements
+  The Datalog Types
 -}
 module Auth.Kailua.Datalog.Types ( Authorizer
                                  , Authorizer' (..)
@@ -46,6 +47,7 @@ module Auth.Kailua.Datalog.Types ( Authorizer
                                  , IsWithinSet (..)
                                  , Op (..)
                                  , PkOrSlice (..)
+                                 , Parser
                                  , Policy
                                  , Policy'
                                  , PolicyType (..)
@@ -60,10 +62,12 @@ module Auth.Kailua.Datalog.Types ( Authorizer
                                  , Rule' (..)
                                  , RuleScope
                                  , RuleScope' (..)
+                                 , SemanticError (..)
                                  , SetType
                                  , SetValue
                                  , Slice (..)
                                  , SliceType
+                                 , Span
                                  , Term
                                  , Term' (..)
                                  , ToEvaluation (..)
@@ -84,7 +88,6 @@ import           Auth.Kailua.Crypto         ( PublicKey
                                             , pkBytes
                                             )
 import           Auth.Kailua.Utils          (encodeHex)
-import           Control.Applicative        ((<|>))
 import           Data.ByteString            (ByteString)
 import           Data.Foldable              ( fold
                                             , toList
@@ -111,6 +114,10 @@ import           Instances.TH.Lift          ()
 import           Language.Haskell.TH
 import           Language.Haskell.TH.Syntax
 import           Numeric.Natural            (Natural)
+
+import Text.Megaparsec
+import Data.List.NonEmpty                       (NonEmpty)
+import qualified Data.List.NonEmpty             as NE
 
 data IsWithinSet = NotWithinSet | WithinSet
 data DatalogContext = WithSlices | Representation
@@ -325,6 +332,16 @@ deriving instance ( Show (Predicate' 'InFact ctx)
                   , Show (QueryItem' evalCtx ctx)
                   ) => Show (AuthorizerElement' evalCtx ctx)
 
+data SemanticError =
+    VarInFact Span
+  | VarInSet  Span
+  | NestedSet Span
+  | InvalidBs Text Span
+  | InvalidPublicKey Text Span
+  | UnboundVariables (NonEmpty Text) Span
+  | PreviousInAuthorizer Span
+  deriving stock (Eq, Ord)
+
 newtype Slice = Slice Text deriving newtype (Eq, Show, Ord, IsString)
 
 type family VariableType (inSet :: IsWithinSet) (pof :: PredicateOrFact)
@@ -369,6 +386,8 @@ type Block = Block' 'Repr 'Representation
 type EvalBlock = Block' 'Eval 'Representation
 type Authorizer = Authorizer' 'Repr 'Representation
 type SetValue = Term' 'WithinSet 'InFact 'Representation
+type Parser = Parsec SemanticError Text
+type Span = (Int, Int)
 
 class ToTerm t inSet pof
   where
@@ -544,6 +563,16 @@ instance ToEvaluation Authorizer' where
     { vBlock = toRepresentation (vBlock a)
     , vPolicies = fmap (fmap toRepresentation) <$> vPolicies a
     }
+
+instance ShowErrorComponent SemanticError where
+  showErrorComponent = \case
+    VarInFact _            -> "Variables can't appear in a fact"
+    VarInSet  _            -> "Variables can't appear in a set"
+    NestedSet _            -> "Sets cannot be nested"
+    InvalidBs e _          -> "Invalid bytestring literal: " <> unpack e
+    InvalidPublicKey e _   -> "Invalid public key: " <> unpack e
+    UnboundVariables e _   -> "Unbound variables: " <> unpack (intercalate ", " $ NE.toList e)
+    PreviousInAuthorizer _ -> "'previous' can't appear in an authorizer scope"
 
 checkToEvaluation :: [Maybe PublicKey] -> Check -> EvalCheck
 checkToEvaluation = toEvaluation
