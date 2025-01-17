@@ -14,15 +14,7 @@
   Maintainer  : lugatex@yahoo.com
   The Datalog engine, tasked with deriving new facts from existing facts and rules, as well as matching available facts against checks and policies
 -}
-module Auth.Kailua.Datalog.Executor ( Bindings
-                                    , ExecutionError (..)
-                                    , FactGroup (..)
-                                    , Limits (..)
-                                    , MatchedQuery (..)
-                                    , Name
-                                    , ResultError (..)
-                                    , Scoped
-                                    , checkCheck
+module Auth.Kailua.Datalog.Executor ( checkCheck
                                     , checkPolicy
                                     , countFacts
                                     , defaultLimits
@@ -36,6 +28,7 @@ module Auth.Kailua.Datalog.Executor ( Bindings
                                     ) where
 
 import           Auth.Kailua.Datalog.AST
+import           Auth.Kailua.Datalog.Types (Bindings, ExecutionError (..), FactGroup (..),  Limits (..) MatchedQuery (..), Name, ResultError (..), Scoped)
 import           Auth.Kailua.Utils        (allM, anyM, maybeToRight, setFilterM)
 import           Control.Monad            (join, mfilter, zipWithM)
 import           Data.Bitraversable       (bitraverse)
@@ -59,61 +52,6 @@ import           Numeric.Natural          (Natural)
 import qualified Text.Regex.TDFA          as Regex
 import qualified Text.Regex.TDFA.Text     as Regex
 import           Validation               (Validation (..), failure)
-
-type Name = Text
-type Bindings  = Map Name Value
-type Scoped a = (Set Natural, a)
-
-newtype FactGroup = FactGroup { getFactGroup :: Map (Set Natural) (Set Fact) }
-  deriving newtype (Eq)
-
-data MatchedQuery
-  = MatchedQuery
-  { matchedQuery :: Query
-  , bindings     :: Set Bindings
-  }
-  deriving (Eq, Show)
-
-data ResultError
-  = NoPoliciesMatched [Check]
-  | FailedChecks      (NonEmpty Check)
-  | DenyRuleMatched   [Check] MatchedQuery
-  deriving (Eq, Show)
-
-data ExecutionError
-  = Timeout
-  | TooManyFacts
-  | TooManyIterations
-  | InvalidRule
-  | ResultError ResultError
-  | EvaluationError String
-  deriving (Eq, Show)
-
-data Limits
-  = Limits
-  { maxFacts      :: Int
-  , maxIterations :: Int
-  , maxTime       :: Int
-  , allowRegexes  :: Bool
-  }
-  deriving (Eq, Show)
-
-instance Show FactGroup
-  where
-    show (FactGroup groups) =
-      let showGroup (origin, facts) = unlines
-            [ "For origin: " <> show (Set.toList origin)
-            , "Facts: \n" <> unlines (unpack . renderFact <$> Set.toList facts)
-            ]
-      in unlines $ showGroup <$> Map.toList groups
-
-instance Semigroup FactGroup
-  where
-    FactGroup f1 <> FactGroup f2 = FactGroup $ Map.unionWith (<>) f1 f2
-
-instance Monoid FactGroup
-  where
-    mempty = FactGroup mempty
 
 keepAuthorized :: FactGroup -> Set Natural -> FactGroup
 keepAuthorized (FactGroup facts) authorizedOrigins =

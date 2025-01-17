@@ -26,6 +26,7 @@ module Auth.Kailua.Datalog.Types ( Authorizer
                                  , Authorizer' (..)
                                  , AuthorizerElement' (..)
                                  , Binary (..)
+                                 , Bindings
                                  , Block
                                  , Block' (..)
                                  , BlockElement' (..)
@@ -40,14 +41,18 @@ module Auth.Kailua.Datalog.Types ( Authorizer
                                  , EvalRule
                                  , EvalRuleScope
                                  , EvaluationContext (..)
+                                 , ExecutionError (..)
                                  , Expression
                                  , Expression' (..)
                                  , Fact
                                  , FromValue (..)
                                  , IsWithinSet (..)
+                                 , Limits (..)
+                                 , MatchedQuery (..)
+                                 , Name
                                  , Op (..)
-                                 , PkOrSlice (..)
                                  , Parser
+                                 , PkOrSlice (..)
                                  , Policy
                                  , Policy'
                                  , PolicyType (..)
@@ -58,10 +63,12 @@ module Auth.Kailua.Datalog.Types ( Authorizer
                                  , Query
                                  , Query'
                                  , QueryItem' (..)
+                                 , ResultError (..)
                                  , Rule
                                  , Rule' (..)
                                  , RuleScope
                                  , RuleScope' (..)
+                                 , Scoped
                                  , SemanticError (..)
                                  , SetType
                                  , SetValue
@@ -342,6 +349,37 @@ data SemanticError =
   | PreviousInAuthorizer Span
   deriving stock (Eq, Ord)
 
+data MatchedQuery
+  = MatchedQuery
+  { matchedQuery :: Query
+  , bindings     :: Set Bindings
+  }
+  deriving (Eq, Show)
+
+data ResultError
+  = NoPoliciesMatched [Check]
+  | FailedChecks      (NonEmpty Check)
+  | DenyRuleMatched   [Check] MatchedQuery
+  deriving (Eq, Show)
+
+data ExecutionError
+  = Timeout
+  | TooManyFacts
+  | TooManyIterations
+  | InvalidRule
+  | ResultError ResultError
+  | EvaluationError String
+  deriving (Eq, Show)
+
+data Limits
+  = Limits
+  { maxFacts      :: Int
+  , maxIterations :: Int
+  , maxTime       :: Int
+  , allowRegexes  :: Bool
+  }
+  deriving (Eq, Show)
+
 newtype Slice = Slice Text deriving newtype (Eq, Show, Ord, IsString)
 
 type family VariableType (inSet :: IsWithinSet) (pof :: PredicateOrFact)
@@ -388,6 +426,12 @@ type Authorizer = Authorizer' 'Repr 'Representation
 type SetValue = Term' 'WithinSet 'InFact 'Representation
 type Parser = Parsec SemanticError Text
 type Span = (Int, Int)
+type Name = Text
+type Bindings  = Map Name Value
+type Scoped a = (Set Natural, a)
+
+newtype FactGroup = FactGroup { getFactGroup :: Map (Set Natural) (Set Fact) }
+  deriving newtype (Eq)
 
 class ToTerm t inSet pof
   where
@@ -573,6 +617,23 @@ instance ShowErrorComponent SemanticError where
     InvalidPublicKey e _   -> "Invalid public key: " <> unpack e
     UnboundVariables e _   -> "Unbound variables: " <> unpack (intercalate ", " $ NE.toList e)
     PreviousInAuthorizer _ -> "'previous' can't appear in an authorizer scope"
+
+instance Show FactGroup
+  where
+    show (FactGroup groups) =
+      let showGroup (origin, facts) = unlines
+            [ "For origin: " <> show (Set.toList origin)
+            , "Facts: \n" <> unlines (unpack . renderFact <$> Set.toList facts)
+            ]
+      in unlines $ showGroup <$> Map.toList groups
+
+instance Semigroup FactGroup
+  where
+    FactGroup f1 <> FactGroup f2 = FactGroup $ Map.unionWith (<>) f1 f2
+
+instance Monoid FactGroup
+  where
+    mempty = FactGroup mempty
 
 checkToEvaluation :: [Maybe PublicKey] -> Check -> EvalCheck
 checkToEvaluation = toEvaluation
