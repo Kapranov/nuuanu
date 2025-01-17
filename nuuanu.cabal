@@ -44,8 +44,10 @@ library
       Auth.Kailua.Datalog.AST
       Auth.Kailua.Datalog.Executor
       Auth.Kailua.Datalog.Parser
+      Auth.Kailua.Datalog.ScopedExecutor
       Auth.Kailua.Datalog.Types
       Auth.Kailua.Proto
+      Auth.Kailua.Timer
       Auth.Kailua.Types
       Auth.Kailua.Utils
       Criterion.Fibber

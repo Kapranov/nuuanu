@@ -11,7 +11,15 @@
   Maintainer  : lugatex@yahoo.com
   The Datalog engine, tasked with deriving new facts from existing facts and rules, as well as matching available facts against checks and policies
 -}
-module Auth.Kailua.Datalog.Executor ( checkCheck
+module Auth.Kailua.Datalog.Executor ( Bindings
+                                    , ExecutionError (..)
+                                    , FactGroup (..)
+                                    , Limits (..)
+                                    , MatchedQuery (..)
+                                    , Names
+                                    , ResultError (..)
+                                    , Scoped
+                                    , checkCheck
                                     , checkPolicy
                                     , countFacts
                                     , defaultLimits
@@ -24,12 +32,40 @@ module Auth.Kailua.Datalog.Executor ( checkCheck
                                     , toScopedFacts
                                     ) where
 
-import           Auth.Kailua.Datalog.AST
+import           Auth.Kailua.Datalog.AST   ( Binary (..)
+                                           , Check
+                                           , Check' (..)
+                                           , CheckKind (..)
+                                           , DatalogContext (..)
+                                           , EvalCheck
+                                           , EvalPolicy
+                                           , EvalRule
+                                           , EvalRuleScope
+                                           , EvaluationContext (..)
+                                           , Expression
+                                           , Expression' (..)
+                                           , Fact
+                                           , PolicyType (..)
+                                           , Predicate
+                                           , Predicate' (..)
+                                           , QueryItem' (..)
+                                           , Rule' (..)
+                                           , RuleScope' (..)
+                                           , Term
+                                           , Term' (..)
+                                           , ToEvaluation (..)
+                                           , Unary (..)
+                                           , Value
+                                           , extractVariables
+                                           , valueToSetTerm
+                                           )
 import           Auth.Kailua.Datalog.Types ( Bindings
+                                           , ExecutionError (..)
                                            , FactGroup (..)
                                            , Limits (..)
                                            , MatchedQuery (..)
                                            , Names
+                                           , ResultError (..)
                                            , Scoped
                                            )
 import           Auth.Kailua.Utils         ( allM

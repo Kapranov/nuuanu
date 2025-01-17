@@ -61,10 +61,6 @@ module Auth.Kailua.Datalog.AST ( Authorizer
                                , Value
                                , VariableType
                                , checkToEvaluation
-                               , policyToEvaluation
-                               , renderBlock
-                               , renderFact
-                               , renderRule
                                , elementToAuthorizer
                                , elementToBlock
                                , extractVariables
@@ -74,9 +70,13 @@ module Auth.Kailua.Datalog.AST ( Authorizer
                                , listSymbolsInBlock
                                , makeQueryItem
                                , makeRule
+                               , policyToEvaluation
                                , queryHasNoScope
                                , queryHasNoV4Operators
                                , renderAuthorizer
+                               , renderBlock
+                               , renderFact
+                               , renderRule
                                , ruleHasNoScope
                                , ruleHasNoV4Operators
                                , substituteAuthorizer

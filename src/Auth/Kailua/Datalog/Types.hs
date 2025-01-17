@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveLift                 #-}
 {-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE DuplicateRecordFields      #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -13,6 +14,7 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 {-|
@@ -23,6 +25,7 @@
   The Datalog Types
 -}
 module Auth.Kailua.Datalog.Types ( Authorizer
+                                 , AuthorizationSuccess (..)
                                  , Authorizer' (..)
                                  , AuthorizerElement' (..)
                                  , Binary (..)
@@ -31,9 +34,11 @@ module Auth.Kailua.Datalog.Types ( Authorizer
                                  , Block' (..)
                                  , BlockElement' (..)
                                  , BlockIdType
+                                 , BlockWithRevocationId
                                  , Check
                                  , Check' (..)
                                  , CheckKind (..)
+                                 , ComputeState (..)
                                  , DatalogContext (..)
                                  , EvalBlock
                                  , EvalCheck
@@ -60,6 +65,7 @@ module Auth.Kailua.Datalog.Types ( Authorizer
                                  , Predicate
                                  , Predicate' (..)
                                  , PredicateOrFact (..)
+                                 , PureExecError (..)
                                  , QQTerm
                                  , Query
                                  , Query'
@@ -381,6 +387,27 @@ data Limits
   }
   deriving (Eq, Show)
 
+data PureExecError = Facts | Iterations | BadRule | BadExpression String
+  deriving (Eq, Show)
+
+data AuthorizationSuccess
+  = AuthorizationSuccess
+  { matchedAllowQuery :: MatchedQuery
+  , allFacts          :: FactGroup
+  , limits            :: Limits
+  }
+  deriving (Eq, Show)
+
+data ComputeState
+  = ComputeState
+  { sLimits     :: Limits
+  , sRules      :: Map Natural (Set EvalRule)
+  , sBlockCount :: Natural
+  , sIterations :: Int
+  , sFacts      :: FactGroup
+  }
+  deriving (Eq, Show)
+
 newtype Slice = Slice Text deriving newtype (Eq, Show, Ord, IsString)
 
 type family VariableType (inSet :: IsWithinSet) (pof :: PredicateOrFact)
@@ -430,6 +457,7 @@ type Span = (Int, Int)
 type Names = Text
 type Bindings  = Map Names Value
 type Scoped a = (Set Natural, a)
+type BlockWithRevocationId = (Block, ByteString, Maybe PublicKey)
 
 newtype FactGroup = FactGroup { getFactGroup :: Map (Set Natural) (Set Fact) }
   deriving newtype (Eq)
