@@ -1,7 +1,4 @@
 {-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -28,30 +25,49 @@ module Auth.Kailua.Datalog.Executor ( checkCheck
                                     ) where
 
 import           Auth.Kailua.Datalog.AST
-import           Auth.Kailua.Datalog.Types (Bindings, ExecutionError (..), FactGroup (..),  Limits (..) MatchedQuery (..), Name, ResultError (..), Scoped)
-import           Auth.Kailua.Utils        (allM, anyM, maybeToRight, setFilterM)
-import           Control.Monad            (join, mfilter, zipWithM)
-import           Data.Bitraversable       (bitraverse)
-import           Data.Bits                (xor, (.&.), (.|.))
-import qualified Data.ByteString          as ByteString
-import           Data.Foldable            (fold)
-import           Data.Functor.Compose     (Compose (..))
-import           Data.Int                 (Int64)
-import           Data.List.NonEmpty       (NonEmpty)
-import qualified Data.List.NonEmpty       as NE
-import           Data.Map.Strict          (Map, (!?))
-import qualified Data.Map.Strict          as Map
-import           Data.Maybe               (isJust, mapMaybe)
-import           Data.Set                 (Set)
-import qualified Data.Set                 as Set
-import           Data.Text                (Text, isInfixOf, unpack)
-import qualified Data.Text                as Text
-import qualified Data.Text.Encoding       as Text
-import           Data.Void                (absurd)
-import           Numeric.Natural          (Natural)
-import qualified Text.Regex.TDFA          as Regex
-import qualified Text.Regex.TDFA.Text     as Regex
-import           Validation               (Validation (..), failure)
+import           Auth.Kailua.Datalog.Types ( Bindings
+                                           , FactGroup (..)
+                                           , Limits (..)
+                                           , MatchedQuery (..)
+                                           , Names
+                                           , Scoped
+                                           )
+import           Auth.Kailua.Utils         ( allM
+                                           , anyM
+                                           , maybeToRight
+                                           , setFilterM
+                                           )
+import           Control.Monad             ( join
+                                           , mfilter
+                                           , zipWithM
+                                           )
+import           Data.Bitraversable        (bitraverse)
+import           Data.Bits                 (xor, (.&.), (.|.))
+import qualified Data.ByteString           as ByteString
+import           Data.Foldable             (fold)
+import           Data.Functor.Compose      (Compose (..))
+import           Data.Int                  (Int64)
+import           Data.List.NonEmpty        (NonEmpty)
+import qualified Data.List.NonEmpty        as NE
+import           Data.Map.Strict           (Map, (!?))
+import qualified Data.Map.Strict           as Map
+import           Data.Maybe                ( isJust
+                                           , mapMaybe
+                                           )
+import           Data.Set                  (Set)
+import qualified Data.Set                  as Set
+import           Data.Text                 ( Text
+                                           , isInfixOf
+                                           )
+import qualified Data.Text                 as Text
+import qualified Data.Text.Encoding        as Text
+import           Data.Void                 (absurd)
+import           Numeric.Natural           (Natural)
+import qualified Text.Regex.TDFA           as Regex
+import qualified Text.Regex.TDFA.Text      as Regex
+import           Validation                ( Validation (..)
+                                           , failure
+                                           )
 
 keepAuthorized :: FactGroup -> Set Natural -> FactGroup
 keepAuthorized (FactGroup facts) authorizedOrigins =
@@ -92,7 +108,7 @@ isSame _ _                        = False
 
 mergeBindings :: [Bindings] -> Bindings
 mergeBindings =
-  let combinations :: [Bindings] -> Map Name (NonEmpty Value)
+  let combinations :: [Bindings] -> Map Names (NonEmpty Value)
       combinations = Map.unionsWith (<>) . fmap (fmap pure)
       sameValues = fmap NE.head . mfilter ((== 1) . length) . Just . NE.nub
       keepConsistent = Map.mapMaybe sameValues
@@ -125,7 +141,7 @@ getCandidateBindings facts predicates =
 getCombinations :: [[Scoped Bindings]] -> [Scoped [Bindings]]
 getCombinations = getCompose . traverse Compose
 
-reduceCandidateBindings :: Set Name -> [Set (Scoped Bindings)] -> Set (Scoped Bindings)
+reduceCandidateBindings :: Set Names -> [Set (Scoped Bindings)] -> Set (Scoped Bindings)
 reduceCandidateBindings allVariables matches =
   let allCombinations :: [(Set Natural, [Bindings])]
       allCombinations = getCombinations $ Set.toList <$> matches

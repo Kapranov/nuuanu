@@ -45,11 +45,12 @@ module Auth.Kailua.Datalog.Types ( Authorizer
                                  , Expression
                                  , Expression' (..)
                                  , Fact
+                                 , FactGroup (..)
                                  , FromValue (..)
                                  , IsWithinSet (..)
                                  , Limits (..)
                                  , MatchedQuery (..)
-                                 , Name
+                                 , Names
                                  , Op (..)
                                  , Parser
                                  , PkOrSlice (..)
@@ -426,8 +427,8 @@ type Authorizer = Authorizer' 'Repr 'Representation
 type SetValue = Term' 'WithinSet 'InFact 'Representation
 type Parser = Parsec SemanticError Text
 type Span = (Int, Int)
-type Name = Text
-type Bindings  = Map Name Value
+type Names = Text
+type Bindings  = Map Names Value
 type Scoped a = (Set Natural, a)
 
 newtype FactGroup = FactGroup { getFactGroup :: Map (Set Natural) (Set Fact) }
