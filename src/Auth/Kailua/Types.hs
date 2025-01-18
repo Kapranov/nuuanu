@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- |
 --  Module     : Auth.Kailua.Types
 --  Copyright  : updated © Oleg G.Kapranov, 2025
@@ -24,10 +25,12 @@ module Auth.Kailua.Types ( Algorithm (..)
                          , PredicateV2 (..)
                          , Proof (..)
                          , PublicKey (..)
+                         , PublicKeyRef (..)
                          , RuleV2 (..)
                          , Scope (..)
                          , ScopeType (..)
                          , SignedBlock (..)
+                         , SymbolRef (..)
                          , TermSet (..)
                          , TermV2 (..)
                          , TernaryKind (..)
@@ -36,11 +39,13 @@ module Auth.Kailua.Types ( Algorithm (..)
                          , UnaryKind (..)
                          ) where
 
-import Data.ByteString      (ByteString)
+import Data.ByteString              (ByteString)
 import Data.Int
+import Data.Map                     (Map, elems, (!?))
+import qualified Data.Map           as Map
 import Data.ProtocolBuffers
 import Data.Text
-import GHC.Generics         (Generic)
+import GHC.Generics                 (Generic)
 
 data Kailua = Kailua
   { rootKeyId :: Optional 1 (Value Int32)
@@ -222,3 +227,17 @@ newtype OpTernary = OpTernary
   { kind :: Required 1 (Enumeration TernaryKind)
   } deriving stock (Generic, Show)
     deriving anyclass (Decode, Encode)
+
+newtype SymbolRef = SymbolRef { getSymbolRef :: Int64 }
+  deriving stock (Eq, Ord)
+  deriving newtype (Enum)
+
+newtype PublicKeyRef = PublicKeyRef { getPublicKeyRef :: Int64 }
+  deriving stock (Eq, Ord)
+  deriving newtype (Enum)
+
+instance Show SymbolRef where
+  show = ("#" <>) . show . getSymbolRef
+
+instance Show PublicKeyRef where
+  show = ("#" <>) . show . getPublicKeyRef
