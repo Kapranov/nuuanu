@@ -50,6 +50,7 @@ library
       Auth.Kailua.ProtoBufAdapter
       Auth.Kailua.Symbols
       Auth.Kailua.Timer
+      Auth.Kailua.Token
       Auth.Kailua.Types
       Auth.Kailua.Utils
       Criterion.Fibber
