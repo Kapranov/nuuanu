@@ -46,6 +46,7 @@ library
       Auth.Kailua.Datalog.Parser
       Auth.Kailua.Datalog.ScopedExecutor
       Auth.Kailua.Datalog.Types
+      Auth.Kailua.Example
       Auth.Kailua.Proto
       Auth.Kailua.ProtoBufAdapter
       Auth.Kailua.Symbols

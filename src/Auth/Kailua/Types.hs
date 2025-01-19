@@ -39,13 +39,13 @@ module Auth.Kailua.Types ( Algorithm (..)
                          , UnaryKind (..)
                          ) where
 
-import Data.ByteString              (ByteString)
+import Data.ByteString      (ByteString)
 import Data.Int
-import Data.Map                     (Map, elems, (!?))
-import qualified Data.Map           as Map
+import Data.Map             (Map, elems, (!?))
+import qualified Data.Map   as Map
 import Data.ProtocolBuffers
 import Data.Text
-import GHC.Generics                 (Generic)
+import GHC.Generics         (Generic)
 
 data Kailua = Kailua
   { rootKeyId :: Optional 1 (Value Int32)
