@@ -40,6 +40,7 @@ library
       Auth.Bisque.Timer
       Auth.Bisque.Token
       Auth.Bisque.Utils
+      Auth.Kailua
       Auth.Kailua.Crypto
       Auth.Kailua.Datalog.AST
       Auth.Kailua.Datalog.Executor
