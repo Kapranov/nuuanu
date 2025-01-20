@@ -1,10 +1,10 @@
 {-# LANGUAGE CPP #-}
--- |
+{-|
 --  Module     : Auth.Kailua.Utils
 --  Copyright  : updated © Oleg G.Kapranov, 2025
 --  License    : MIT
 --  Maintainer : lugatex@yahoo.com
-
+-}
 module Auth.Kailua.Utils ( allM
                          , anyM
                          , decodeHex

@@ -51,26 +51,26 @@ import           Instances.TH.Lift          ()
 import           Language.Haskell.TH.Syntax
 
 newtype PublicKey = PublicKey Ed25519.PublicKey
-  deriving newtype (Eq, Show)
+ deriving newtype (Eq, Show)
 
 instance Ord PublicKey
-  where
-    compare = compare `on` serializePublicKey
+ where
+   compare = compare `on` serializePublicKey
 
 instance Lift PublicKey
-  where
-    lift pk = [| fromJust $ readEd25519PublicKey $(lift $ pkBytes pk) |]
+ where
+   lift pk = [| fromJust $ readEd25519PublicKey $(lift $ pkBytes pk) |]
 #if MIN_VERSION_template_haskell(2,17,0)
-    liftTyped = liftCode . unsafeTExpCoerce . lift
+   liftTyped = liftCode . unsafeTExpCoerce . lift
 #else
-    liftTyped = unsafeTExpCoerce . lift
+   liftTyped = unsafeTExpCoerce . lift
 #endif
 
 newtype SecretKey = SecretKey Ed25519.SecretKey
-  deriving newtype (Eq, Show)
+ deriving newtype (Eq, Show)
 
 newtype Signature = Signature ByteString
-  deriving newtype (Eq, Show)
+ deriving newtype (Eq, Show)
 
 type SignedBlock = (ByteString, Signature, PublicKey, Maybe (Signature, PublicKey))
 type Blocks = NonEmpty SignedBlock

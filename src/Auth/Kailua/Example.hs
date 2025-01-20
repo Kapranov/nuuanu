@@ -1,5 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes       #-}
+{-|
+  Module     : Auth.Kailua.Example
+  Copyright  : updated © Oleg G.Kapranov, 2025
+  License    : MIT
+  Maintainer : lugatex@yahoo.com
+-}
 module Auth.Kailua.Example ( creation
                            , privateKey'
                            , publicKey'

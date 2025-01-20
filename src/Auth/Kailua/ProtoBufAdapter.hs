@@ -104,15 +104,15 @@ import           Data.Void               (absurd)
 import           GHC.Records             (getField)
 import           Validation              (Validation (..))
 
-pbToPublicKey :: PB.PublicKey -> Either String Crypto.PublicKey
-pbToPublicKey PB.PublicKey{..} =
+pbToPublicKey :: PB.ExPublicKey -> Either String Crypto.PublicKey
+pbToPublicKey PB.ExPublicKey{..} =
   let keyBytes = PB.getField key
       parseKey = Crypto.readEd25519PublicKey
   in case PB.getField algorithm of
        PB.Ed25519 -> maybeToRight "Invalid ed25519 public key" $ parseKey keyBytes
 
-publicKeyToPb :: Crypto.PublicKey -> PB.PublicKey
-publicKeyToPb pk = PB.PublicKey
+publicKeyToPb :: Crypto.PublicKey -> PB.ExPublicKey
+publicKeyToPb pk = PB.ExPublicKey
   { algorithm = PB.putField PB.Ed25519
   , key = PB.putField $ Crypto.pkBytes pk
   }

@@ -4,16 +4,18 @@
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
--- |
+{-|
 --  Module     : Auth.Kailua.Types
 --  Copyright  : updated © Oleg G.Kapranov, 2025
 --  License    : MIT
 --  Maintainer : lugatex@yahoo.com
+-}
 module Auth.Kailua.Types ( Algorithm (..)
                          , BinaryKind (..)
                          , Block (..)
                          , CheckKind (..)
                          , CheckV2 (..)
+                         , ExPublicKey (..)
                          , ExpressionV2 (..)
                          , ExternalSig (..)
                          , FactV2 (..)
@@ -24,7 +26,6 @@ module Auth.Kailua.Types ( Algorithm (..)
                          , OpUnary (..)
                          , PredicateV2 (..)
                          , Proof (..)
-                         , PublicKey (..)
                          , PublicKeyRef (..)
                          , RuleV2 (..)
                          , Scope (..)
@@ -41,8 +42,6 @@ module Auth.Kailua.Types ( Algorithm (..)
 
 import Data.ByteString      (ByteString)
 import Data.Int
-import Data.Map             (Map, elems, (!?))
-import qualified Data.Map   as Map
 import Data.ProtocolBuffers
 import Data.Text
 import GHC.Generics         (Generic)
@@ -63,14 +62,14 @@ data Proof =
 
 data ExternalSig = ExternalSig
   { signature :: Required 1 (Value ByteString)
-  , publicKey :: Required 2 (Message PublicKey)
+  , publicKey :: Required 2 (Message ExPublicKey)
   }
   deriving (Generic, Show)
   deriving anyclass (Decode, Encode)
 
 data SignedBlock = SignedBlock
   { block       :: Required 1 (Value ByteString)
-  , nextKey     :: Required 2 (Message PublicKey)
+  , nextKey     :: Required 2 (Message ExPublicKey)
   , signature   :: Required 3 (Value ByteString)
   , externalSig :: Optional 4 (Message ExternalSig)
   }
@@ -80,7 +79,7 @@ data SignedBlock = SignedBlock
 data Algorithm = Ed25519
   deriving stock (Show, Enum, Bounded)
 
-data PublicKey = PublicKey
+data ExPublicKey = ExPublicKey
   { algorithm :: Required 1 (Enumeration Algorithm)
   , key       :: Required 2 (Value ByteString)
   }
@@ -95,7 +94,7 @@ data Block = Block {
   , rules_v2  :: Repeated 5 (Message RuleV2)
   , checks_v2 :: Repeated 6 (Message CheckV2)
   , scope     :: Repeated 7 (Message Scope)
-  , pksTable  :: Repeated 8 (Message PublicKey)
+  , pksTable  :: Repeated 8 (Message ExPublicKey)
   } deriving stock (Generic, Show)
     deriving anyclass (Decode, Encode)
 
@@ -186,8 +185,8 @@ data TernaryKind =
 
 data ThirdPartyBlockRequest
   = ThirdPartyBlockRequest
-  { previousPk :: Required 1 (Message PublicKey)
-  , pkTable    :: Repeated 2 (Message PublicKey)
+  { previousPk :: Required 1 (Message ExPublicKey)
+  , pkTable    :: Repeated 2 (Message ExPublicKey)
   } deriving stock (Generic, Show)
     deriving anyclass (Decode, Encode)
 
@@ -236,8 +235,10 @@ newtype PublicKeyRef = PublicKeyRef { getPublicKeyRef :: Int64 }
   deriving stock (Eq, Ord)
   deriving newtype (Enum)
 
-instance Show SymbolRef where
-  show = ("#" <>) . show . getSymbolRef
+instance Show SymbolRef
+  where
+    show = ("#" <>) . show . getSymbolRef
 
-instance Show PublicKeyRef where
-  show = ("#" <>) . show . getPublicKeyRef
+instance Show PublicKeyRef
+  where
+    show = ("#" <>) . show . getPublicKeyRef
