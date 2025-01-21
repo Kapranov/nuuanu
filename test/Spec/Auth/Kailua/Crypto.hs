@@ -4,7 +4,21 @@
 {-# LANGUAGE RecordWildCards       #-}
 module Spec.Auth.Kailua.Crypto (specs) where
 
-import Auth.Kailua.Crypto
+import Auth.Kailua.Crypto            ( Blocks
+                                     , PublicKey
+                                     , SecretKey
+                                     , Signature
+                                     , SignedBlock
+                                     , generateSecretKey
+                                     , getSignatureProof
+                                     , sign
+                                     , signBlock
+                                     , signExternalBlock
+                                     , toPublic
+                                     , verifyBlocks
+                                     , verifySecretProof
+                                     , verifySignatureProof
+                                     )
 import Data.ByteString               (ByteString)
 import Data.List.NonEmpty            (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty  as NE
