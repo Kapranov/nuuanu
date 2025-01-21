@@ -91,9 +91,10 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - nuuanu
-    - hspec
     - QuickCheck
     - bytestring
+    - hspec
+    - nuuanu
     - tasty
     - tasty-hunit
+    - text

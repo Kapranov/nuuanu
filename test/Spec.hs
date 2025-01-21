@@ -3,12 +3,16 @@ import Test.QuickCheck
 import Test.Tasty
 import Control.Exception (evaluate)
 
-import qualified Spec.Auth.Kailua.Crypto as Crypto
+import qualified Spec.Auth.Kailua.Crypto      as Crypto
+import qualified Spec.Auth.Kailua.Quasiquoter as Quasiquoter
 
 main :: IO ()
 main = do
   defaultMain $ testGroup "nuuanu"
-    [Crypto.specs]
+    [
+      Crypto.specs
+    , Quasiquoter.specs
+    ]
   hspec spec
 
 spec :: Spec

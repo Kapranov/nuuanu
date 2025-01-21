@@ -1168,4 +1168,8 @@ Examples
 * The application compiles without any issues by running `ghc -i=src/a -i=src/b src/ModuleB.hs` in `$ROOT`.
 * Similarly, running ghcide in `$ROOT` also does not produce any type errors.
 
+### Errors
+
+ - `src/Auth/Kailua/Datalog/Executor.hs` 199
+
 ### 10 Oct 2024 by Oleg G.Kapranov
