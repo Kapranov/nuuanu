@@ -13,7 +13,8 @@
   Maintainer  : lugatex@yahoo.com
   The Datalog Parser
 -}
-module Auth.Kailua.Datalog.Parser ( authorizer
+module Auth.Kailua.Datalog.Parser ( Parser
+                                  , authorizer
                                   , authorizerParser
                                   , block
                                   , blockParser
@@ -27,9 +28,11 @@ module Auth.Kailua.Datalog.Parser ( authorizer
                                   , policyParser
                                   , predicate
                                   , predicateParser
+                                  , predicateTermParser
                                   , query
                                   , rule
                                   , ruleParser
+                                  , run
                                   , termParser
                                   ) where
 

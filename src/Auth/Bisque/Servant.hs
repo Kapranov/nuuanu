@@ -31,7 +31,6 @@ module Auth.Bisque.Servant ( RequireBisque
 
 import Auth.Bisque                      as Bisque
 import Data.Kind (Type)
-import Control.Applicative              (liftA2)
 import Control.Monad.Except             (MonadError, throwError)
 import Control.Monad.IO.Class           (MonadIO, liftIO)
 import Control.Monad.Reader             (ReaderT, lift, runReaderT)

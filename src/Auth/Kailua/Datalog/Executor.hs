@@ -168,7 +168,7 @@ factMatchesPredicate Predicate{name = predicateName, terms = predicateTerms }
 
 getCandidateBindings :: Set (Scoped Fact) -> [Predicate] -> [Set (Scoped Bindings)]
 getCandidateBindings facts predicates =
-   let mapMaybeS :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
+   let mapMaybeS :: (Ord b) => (a -> Maybe b) -> Set a -> Set b
        mapMaybeS f = foldMap (foldMap Set.singleton . f)
        keepFacts :: Predicate -> Set (Scoped Bindings)
        keepFacts p = mapMaybeS (factMatchesPredicate p) facts

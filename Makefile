@@ -42,11 +42,13 @@ git_vtree:
 	$(V)$(GIT) vtree
 
 start:
-	$(V)$(STACK) ghci
+	$(V)$(STACK) ghci --ghci-options "-threaded"
+
+start_bench:
+	$(V)$(STACK) ghci --main-is benchmark --ghci-options "-threaded"
 
 start_test:
-	$(V)$(STACK) ghci --ghci-options -itest nuuanu:nuuanu-test
-
+	$(V)$(STACK) ghci --test --main-is nuuanu-test --ghci-options "-threaded"
 
 no_prelude:
 	$(V)ghci -XNoImplicitPrelude
@@ -61,7 +63,7 @@ ghci:
 	$(V)$(STACK)ghci
 
 test:
-	$(V)$(STACK) test
+	$(V)$(STACK) test --ghc-options "-threaded" nuuanu:test:nuuanu-test
 
 test-ghci:
 	$(V)$(STACK) ghci $(package):test:$(package)-tests
@@ -70,7 +72,7 @@ bench:
 	$(V)$(STACK) bench $(package)
 
 ghcid:
-	$(V)$(STACK) exec -- ghcid -c "stack ghci $(package) --test --ghci-options='-fobject-code -fno-warn-unused-do-bind'"
+	$(V)$(STACK) exec -- ghcid -l -c 'stack ghci nuuanu:lib nuuanu:nuuanu-test' -T main
 
 dev-deps:
 	$(V)$(STACK) install ghcid

@@ -168,7 +168,7 @@ registerNewPublicKeys newPks s@Symbols{publicKeys} =
 reverseSymbols :: Symbols -> ReverseSymbols
 reverseSymbols (Symbols sm pkm) =
   let swap (a,b) = (b,a)
-      reverseMap :: (Ord a, Ord b) => Map a b -> Map b a
+      reverseMap :: (Ord b) => Map a b -> Map b a
       reverseMap = Map.fromList . fmap swap . Map.toList
   in ReverseSymbols
       { reverseSymbolMap = reverseMap sm

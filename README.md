@@ -1170,6 +1170,22 @@ Examples
 
 ### Errors
 
- - `src/Auth/Kailua/Datalog/Executor.hs` 199
+```
+import Data.ByteString       as BS
+import Data.ByteString.Char8 as CH
+
+λ :reload
+λ :load test/Spec/Auth/Kailua/SampleReader.hs
+
+λ filename = "test031_limit_expired_token.bc" :: String
+λ proba <- readSamplesFile
+λ SampleFile {root_private_key = sk, root_public_key = pk, testcases = ttt} = proba
+λ token <- buildToken sk "123"
+λ BS.writeFile ("test/samples/current/" <> filename) (serialize token)
+
+λ xxx <- BS.readFile ("test/samples/current/" <> filename)
+λ parsingOptions = ParserConfig {encoding = RawBytes, isRevoked = const $ pure False, getPublicKey = pure pk}
+λ parseWith parsingOptions xxx
+```
 
 ### 10 Oct 2024 by Oleg G.Kapranov

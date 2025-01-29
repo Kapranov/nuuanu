@@ -9,8 +9,55 @@ copyright:           "Copyright (c) 2024 Oleg G.Kapranov"
 extra-source-files:
 - README.md
 - CHANGELOG.md
+- test/samples/current/samples.json
+- test/samples/current/test001_basic.bc
+- test/samples/current/test002_different_root_key.bc
+- test/samples/current/test003_invalid_signature_format.bc
+- test/samples/current/test004_random_block.bc
+- test/samples/current/test005_invalid_signature.bc
+- test/samples/current/test006_reordered_blocks.bc
+- test/samples/current/test007_scoped_rules.bc
+- test/samples/current/test008_scoped_checks.bc
+- test/samples/current/test009_expired_token.bc
+- test/samples/current/test010_authorizer_scope.bc
+- test/samples/current/test011_authorizer_authority_caveats.bc
+- test/samples/current/test012_authority_caveats.bc
+- test/samples/current/test013_block_rules.bc
+- test/samples/current/test014_regex_constraint.bc
+- test/samples/current/test015_multi_queries_caveats.bc
+- test/samples/current/test016_caveat_head_name.bc
+- test/samples/current/test017_expressions.bc
+- test/samples/current/test018_unbound_variables_in_rule.bc
+- test/samples/current/test019_generating_ambient_from_variables.bc
+- test/samples/current/test020_sealed.bc
+- test/samples/current/test021_parsing.bc
+- test/samples/current/test022_default_symbols.bc
+- test/samples/current/test023_execution_scope.bc
+- test/samples/current/test024_third_party.bc
+- test/samples/current/test025_check_all.bc
+- test/samples/current/test026_public_keys_interning.bc
+- test/samples/current/test027_integer_wraparound.bc
+- test/samples/current/test028_expressions_v4.bc
 
 description:         Please see the README on GitHub at <https://github.com/Kapranov/nuuanu#readme>
+
+default-extensions:
+- BlockArguments
+- ConstraintKinds
+- DoAndIfThenElse
+- DuplicateRecordFields
+- FlexibleContexts
+- FlexibleInstances
+- GeneralizedNewtypeDeriving
+- LambdaCase
+- MultiParamTypeClasses
+- NamedFieldPuns
+- OverloadedStrings
+- QuasiQuotes
+- ScopedTypeVariables
+- TemplateHaskell
+- TupleSections
+- TypeApplications
 
 dependencies:
 - base >= 4.7 && < 5
@@ -21,56 +68,55 @@ ghc-options:
 - -Widentities
 - -Wincomplete-record-updates
 - -Wincomplete-uni-patterns
-- -Wmissing-export-lists
-- -Wmissing-home-modules
 - -Wpartial-fields
 - -Wredundant-constraints
 
 library:
-  source-dirs: [benchmarks, src]
+  source-dirs: [src]
   dependencies:
     - aeson
+    - async
+    - attoparsec
     - base16
     - base64-bytestring
     - bytestring
+    - cereal
+    - containers
     - criterion
     - criterion-measurement
     - crypton
     - doctest
     - entropy
     - fakedata
+    - filepath
     - jose-jwt
     - jsonifier
+    - megaparsec
     - memory
     - mtl
     - network
+    - parser-combinators
+    - protobuf
     - random
+    - regex-tdfa
     - scotty
+    - servant-server
+    - template-haskell
     - text
+    - text-display
+    - th-lift-instances
     - time
+    - unix
     - uuid
+    - validation-selective
+    - wai
     - websockets
     - wuss
-    - th-lift-instances
-    - containers
-    - template-haskell
-    - validation-selective
-    - protobuf
-    - cereal
-    - attoparsec
-    - parser-combinators
-    - megaparsec
-    - regex-tdfa
-    - async
-    - servant-server
-    - wai
-    - text-display
-    - filepath
-    - unix
 
 executables:
   nuuanu-exe:
     main:                Main.hs
+    other-modules:       []
     source-dirs:         app
     ghc-options:
     - -threaded
@@ -85,16 +131,34 @@ executables:
 tests:
   nuuanu-test:
     main:                Spec.hs
-    source-dirs:         test
+    other-modules: [
+      Spec.Auth.Kailua.Crypto,
+      Spec.Auth.Kailua.Executor,
+      Spec.Auth.Kailua.Parser,
+      Spec.Auth.Kailua.Quasiquoter,
+      Spec.Auth.Kailua.Roundtrip,
+      Spec.Auth.Kailua.SampleReader,
+      Spec.Auth.Kailua.ScopedExecutor,
+      Spec.Auth.Kailua.Verification
+    ]
+    source-dirs: [benchmarks, test]
     ghc-options:
     - -threaded
     - -rtsopts
-    - -with-rtsopts=-N
+    - '"-with-rtsopts=-N -A32m -qn2 -T"'
     dependencies:
     - QuickCheck
+    - aeson
+    - base16
     - bytestring
+    - containers
     - hspec
+    - lens
+    - lens-aeson
     - nuuanu
+    - parallel
     - tasty
     - tasty-hunit
     - text
+    - time
+    - validation-selective
