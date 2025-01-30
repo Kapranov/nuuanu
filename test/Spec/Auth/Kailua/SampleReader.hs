@@ -41,12 +41,36 @@ module Spec.Auth.Kailua.SampleReader ( BlockDesc (..)
                                      , runTests
                                      ) where
 
-import Auth.Kailua
+import Auth.Kailua                      ( Authorizer
+                                        , Block
+                                        , ExecutionError (..)
+                                        , PublicKey
+                                        , SecretKey
+                                        , block
+                                        , parse
+                                        , parsePublicKeyHex
+                                        , parseSecretKeyHex
+                                        , serialize
+                                        , serializePublicKeyHex
+                                        , serializeSecretKeyHex
+                                        )
 import Auth.Kailua.Datalog.AST          ( renderAuthorizer
                                         , renderBlock
                                         )
 import Auth.Kailua.Datalog.Executor     (ResultError (..))
-import Auth.Kailua.Token
+import Auth.Kailua.Token                ( Kailua
+                                        , Open
+                                        , OpenOrSealed
+                                        , ParseError (..)
+                                        , ParsedSignedBlock
+                                        , Verified
+                                        , addBlock
+                                        , authority
+                                        , authorizeKailua
+                                        , blocks
+                                        , getRevocationIds
+                                        , mkKailua
+                                        )
 import Auth.Kailua.Utils                (encodeHex)
 import Spec.Auth.Kailua.Parser          ( parseAuthorizer
                                         , parseBlock

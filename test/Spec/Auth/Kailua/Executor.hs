@@ -4,7 +4,13 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 module Spec.Auth.Kailua.Executor (specs) where
 
-import Auth.Kailua.Datalog.AST
+import Auth.Kailua.Datalog.AST                   ( EvalRule
+                                                 , Expression
+                                                 , Fact
+                                                 , Rule
+                                                 , Term' (..)
+                                                 , ToEvaluation (..)
+                                                 )
 import Auth.Kailua.Datalog.Executor              ( Limits (..)
                                                  , defaultLimits
                                                  , evaluateExpression
