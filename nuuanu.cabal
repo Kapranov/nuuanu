@@ -47,6 +47,9 @@ extra-source-files:
     test/samples/current/test026_public_keys_interning.bc
     test/samples/current/test027_integer_wraparound.bc
     test/samples/current/test028_expressions_v4.bc
+    test/samples/current/test029_expired_token.bc
+    test/samples/current/test030_period_has_expired.bc
+    test/samples/current/test031_limit_expired_token.bc
 
 source-repository head
   type: git
@@ -191,6 +194,13 @@ test-suite nuuanu-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Spec.Auth.Bisque.Crypto
+      Spec.Auth.Bisque.Executor
+      Spec.Auth.Bisque.Parser
+      Spec.Auth.Bisque.Quasiquoter
+      Spec.Auth.Bisque.Roundtrip
+      Spec.Auth.Bisque.ScopedExecutor
+      Spec.Auth.Bisque.Verification
       Spec.Auth.Kailua.Crypto
       Spec.Auth.Kailua.Executor
       Spec.Auth.Kailua.Parser
@@ -219,14 +229,16 @@ test-suite nuuanu-test
       TemplateHaskell
       TupleSections
       TypeApplications
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -threaded -rtsopts "-with-rtsopts=-N -A32m -qn2 -T"
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -XPackageImports "-with-rtsopts=-N -A32m -qn2 -T"
   build-depends:
       QuickCheck
     , aeson
+    , attoparsec
     , base >=4.7 && <5
     , base16
     , bytestring
     , containers
+    , crypton
     , hspec
     , lens
     , lens-aeson

@@ -38,6 +38,9 @@ extra-source-files:
 - test/samples/current/test026_public_keys_interning.bc
 - test/samples/current/test027_integer_wraparound.bc
 - test/samples/current/test028_expressions_v4.bc
+- test/samples/current/test029_expired_token.bc
+- test/samples/current/test030_period_has_expired.bc
+- test/samples/current/test031_limit_expired_token.bc
 
 description:         Please see the README on GitHub at <https://github.com/Kapranov/nuuanu#readme>
 
@@ -132,6 +135,13 @@ tests:
   nuuanu-test:
     main:                Spec.hs
     other-modules: [
+      Spec.Auth.Bisque.Crypto,
+      Spec.Auth.Bisque.Executor,
+      Spec.Auth.Bisque.Parser,
+      Spec.Auth.Bisque.Quasiquoter,
+      Spec.Auth.Bisque.Roundtrip,
+      Spec.Auth.Bisque.ScopedExecutor,
+      Spec.Auth.Bisque.Verification,
       Spec.Auth.Kailua.Crypto,
       Spec.Auth.Kailua.Executor,
       Spec.Auth.Kailua.Parser,
@@ -145,13 +155,16 @@ tests:
     ghc-options:
     - -threaded
     - -rtsopts
+    - -XPackageImports
     - '"-with-rtsopts=-N -A32m -qn2 -T"'
     dependencies:
     - QuickCheck
     - aeson
+    - attoparsec
     - base16
     - bytestring
     - containers
+    - crypton
     - hspec
     - lens
     - lens-aeson

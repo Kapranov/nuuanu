@@ -22,8 +22,10 @@ module Auth.Bisque (
                    , parseSecretKeyHex
                    , serializePublicKey
                    , serializePublicKeyHex
+                   , serializePublicKeyHex'
                    , serializeSecretKey
                    , serializeSecretKeyHex
+                   , serializeSecretKeyHex'
                    -- * Creating a bisque
                    , Bisque
                    , BisqueProof
@@ -77,6 +79,7 @@ module Auth.Bisque (
                    , queryAuthorizerFacts
                    -- * Retrieving information from a bisque
                    , encodeHex
+                   , encodeHex'
                    , getRevocationIds
                    , getVerifiedBisquePublicKey
                    ) where
@@ -138,7 +141,10 @@ import Auth.Bisque.Token                    ( Bisque
                                             , seal
                                             , serializeBisque
                                             )
-import Auth.Bisque.Utils                    (decodeHex, encodeHex)
+import Auth.Bisque.Utils                    ( decodeHex
+                                            , encodeHex
+                                            , encodeHex'
+                                            )
 import Control.Monad                        ((<=<))
 import Control.Monad.Identity               (runIdentity)
 import Data.ByteString                      (ByteString)
@@ -208,8 +214,14 @@ serializePublicKey = convert
 serializePublicKeyHex :: PublicKey -> T.Text
 serializePublicKeyHex = encodeHex . convert
 
+serializePublicKeyHex' :: PublicKey -> ByteString
+serializePublicKeyHex' = encodeHex' . convert
+
 serializeSecretKey :: SecretKey -> ByteString
 serializeSecretKey = convert
 
 serializeSecretKeyHex :: SecretKey -> T.Text
 serializeSecretKeyHex = encodeHex . convert
+
+serializeSecretKeyHex' :: SecretKey -> ByteString
+serializeSecretKeyHex' = encodeHex' . convert

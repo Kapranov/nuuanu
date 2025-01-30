@@ -3,26 +3,40 @@ import Test.QuickCheck
 import Test.Tasty
 import Control.Exception (evaluate)
 
-import qualified Spec.Auth.Kailua.Crypto         as Crypto
-import qualified Spec.Auth.Kailua.Executor       as Executor
-import qualified Spec.Auth.Kailua.Parser         as Parser
-import qualified Spec.Auth.Kailua.Quasiquoter    as Quasiquoter
-import qualified Spec.Auth.Kailua.Roundtrip      as Roundtrip
-import qualified Spec.Auth.Kailua.SampleReader   as SampleReader
-import qualified Spec.Auth.Kailua.ScopedExecutor as ScopedExecutor
-import qualified Spec.Auth.Kailua.Verification   as Verification
+import qualified Spec.Auth.Bisque.Crypto         as BsCrypto
+import qualified Spec.Auth.Bisque.Executor       as BsExecutor
+import qualified Spec.Auth.Bisque.Parser         as BsParser
+import qualified Spec.Auth.Bisque.Quasiquoter    as BsQuasiquoter
+import qualified Spec.Auth.Bisque.Roundtrip      as BsRoundtrip
+import qualified Spec.Auth.Bisque.ScopedExecutor as BsScopedExecutor
+import qualified Spec.Auth.Bisque.Verification   as BsVerification
+import qualified Spec.Auth.Kailua.Crypto         as KaCrypto
+import qualified Spec.Auth.Kailua.Executor       as KaExecutor
+import qualified Spec.Auth.Kailua.Parser         as KaParser
+import qualified Spec.Auth.Kailua.Quasiquoter    as KaQuasiquoter
+import qualified Spec.Auth.Kailua.Roundtrip      as KaRoundtrip
+import qualified Spec.Auth.Kailua.SampleReader   as KaSampleReader
+import qualified Spec.Auth.Kailua.ScopedExecutor as KaScopedExecutor
+import qualified Spec.Auth.Kailua.Verification   as KaVerification
 
 main :: IO ()
 main = do
-  sampleReader <- SampleReader.getSpecs
+  sampleReader <- KaSampleReader.getSpecs
   defaultMain $ testGroup "nuuanu"
-    [ Crypto.specs
-    , Executor.specs
-    , Parser.specs
-    , Quasiquoter.specs
-    , Roundtrip.specs
-    , Verification.specs
-    , ScopedExecutor.specs
+    [ BsCrypto.specs
+    , BsExecutor.specs
+    , BsParser.specs
+    , BsQuasiquoter.specs
+    , BsRoundtrip.specs
+    , BsScopedExecutor.specs
+    , BsVerification.specs
+    , KaCrypto.specs
+    , KaExecutor.specs
+    , KaParser.specs
+    , KaQuasiquoter.specs
+    , KaRoundtrip.specs
+    , KaScopedExecutor.specs
+    , KaVerification.specs
     , sampleReader
     ]
   hspec spec
