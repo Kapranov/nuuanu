@@ -8,6 +8,7 @@ import qualified Spec.Auth.Bisque.Executor       as BsExecutor
 import qualified Spec.Auth.Bisque.Parser         as BsParser
 import qualified Spec.Auth.Bisque.Quasiquoter    as BsQuasiquoter
 import qualified Spec.Auth.Bisque.Roundtrip      as BsRoundtrip
+import qualified Spec.Auth.Bisque.SampleReader   as BsSampleReader
 import qualified Spec.Auth.Bisque.ScopedExecutor as BsScopedExecutor
 import qualified Spec.Auth.Bisque.Verification   as BsVerification
 import qualified Spec.Auth.Kailua.Crypto         as KaCrypto
@@ -21,7 +22,8 @@ import qualified Spec.Auth.Kailua.Verification   as KaVerification
 
 main :: IO ()
 main = do
-  sampleReader <- KaSampleReader.getSpecs
+  sampleBsReader <- BsSampleReader.getSpecs
+  sampleKaReader <- KaSampleReader.getSpecs
   defaultMain $ testGroup "nuuanu"
     [ BsCrypto.specs
     , BsExecutor.specs
@@ -37,7 +39,8 @@ main = do
     , KaRoundtrip.specs
     , KaScopedExecutor.specs
     , KaVerification.specs
-    , sampleReader
+    , sampleBsReader
+    , sampleKaReader
     ]
   hspec spec
 

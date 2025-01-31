@@ -333,11 +333,11 @@ processTestCase step rootPk TestCase{..} =
 
 readKailua :: SampleFile FilePath -> IO (SampleFile (FilePath, ByteString))
 readKailua =
-  traverse $ traverse (BS.readFile . ("test/samples/current/" <>)) . join (&&&) id
+  traverse $ traverse (BS.readFile . ("test/samples/current/v2/" <>)) . join (&&&) id
 
 readSamplesFile :: IO (SampleFile (FilePath, ByteString))
 readSamplesFile = do
-  f <- either fail pure =<< eitherDecodeFileStrict' "test/samples/current/samples.json"
+  f <- either fail pure =<< eitherDecodeFileStrict' "test/samples/current/v2/samples.json"
   readKailua f
 
 mkTestCase :: PublicKey -> TestCase (FilePath, ByteString) -> TestTree
@@ -361,8 +361,8 @@ runTests step = do
 -- >>> sample <- readSamplesFile
 -- >>> SampleFile {root_private_key = sk, root_public_key = pk, testcases = } = sample
 -- >>> token <- buildToken sk "123"
--- >>> BS.writeFile ("test/samples/current/" <> filename) (serialize token)
--- >>> token <- BS.readFile ("test/samples/current/" <> filename)
+-- >>> BS.writeFile ("test/samples/current/v2/" <> filename) (serialize token)
+-- >>> token <- BS.readFile ("test/samples/current/v2/" <> filename)
 -- >>> parsingOptions = ParserConfig {encoding = RawBytes, isRevoked = const $ pure False, getPublicKey = pure pk}
 -- >>> parseWith parsingOptions token
 -- |
@@ -397,7 +397,7 @@ mkTestCaseFromKailua title filename kailua authorizers = do
           , authorizer_code = authorized
           , revocation_ids = encodeHex <$> toList (getRevocationIds kailua)
           }
-  BS.writeFile ("test/samples/current/" <> filename) (serialize kailua)
+  BS.writeFile ("test/samples/current/v2/" <> filename) (serialize kailua)
   let token = mkBlockDesc <$> getAuthority kailua :| getBlocks kailua
   validations <- Map.fromList <$> traverse (traverse mkValidation) authorizers
   pure TestCase{..}

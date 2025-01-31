@@ -9,38 +9,62 @@ copyright:           "Copyright (c) 2024 Oleg G.Kapranov"
 extra-source-files:
 - README.md
 - CHANGELOG.md
-- test/samples/current/samples.json
-- test/samples/current/test001_basic.bc
-- test/samples/current/test002_different_root_key.bc
-- test/samples/current/test003_invalid_signature_format.bc
-- test/samples/current/test004_random_block.bc
-- test/samples/current/test005_invalid_signature.bc
-- test/samples/current/test006_reordered_blocks.bc
-- test/samples/current/test007_scoped_rules.bc
-- test/samples/current/test008_scoped_checks.bc
-- test/samples/current/test009_expired_token.bc
-- test/samples/current/test010_authorizer_scope.bc
-- test/samples/current/test011_authorizer_authority_caveats.bc
-- test/samples/current/test012_authority_caveats.bc
-- test/samples/current/test013_block_rules.bc
-- test/samples/current/test014_regex_constraint.bc
-- test/samples/current/test015_multi_queries_caveats.bc
-- test/samples/current/test016_caveat_head_name.bc
-- test/samples/current/test017_expressions.bc
-- test/samples/current/test018_unbound_variables_in_rule.bc
-- test/samples/current/test019_generating_ambient_from_variables.bc
-- test/samples/current/test020_sealed.bc
-- test/samples/current/test021_parsing.bc
-- test/samples/current/test022_default_symbols.bc
-- test/samples/current/test023_execution_scope.bc
-- test/samples/current/test024_third_party.bc
-- test/samples/current/test025_check_all.bc
-- test/samples/current/test026_public_keys_interning.bc
-- test/samples/current/test027_integer_wraparound.bc
-- test/samples/current/test028_expressions_v4.bc
-- test/samples/current/test029_expired_token.bc
-- test/samples/current/test030_period_has_expired.bc
-- test/samples/current/test031_limit_expired_token.bc
+- test/samples/current/v1/samples.json
+- test/samples/current/v1/test001_basic.bc
+- test/samples/current/v1/test002_different_root_key.bc
+- test/samples/current/v1/test003_invalid_signature_format.bc
+- test/samples/current/v1/test004_random_block.bc
+- test/samples/current/v1/test005_invalid_signature.bc
+- test/samples/current/v1/test006_reordered_blocks.bc
+- test/samples/current/v1/test007_scoped_rules.bc
+- test/samples/current/v1/test008_scoped_checks.bc
+- test/samples/current/v1/test009_expired_token.bc
+- test/samples/current/v1/test010_authorizer_scope.bc
+- test/samples/current/v1/test011_authorizer_authority_caveats.bc
+- test/samples/current/v1/test012_authority_caveats.bc
+- test/samples/current/v1/test013_block_rules.bc
+- test/samples/current/v1/test014_regex_constraint.bc
+- test/samples/current/v1/test015_multi_queries_caveats.bc
+- test/samples/current/v1/test016_caveat_head_name.bc
+- test/samples/current/v1/test017_expressions.bc
+- test/samples/current/v1/test018_unbound_variables_in_rule.bc
+- test/samples/current/v1/test019_generating_ambient_from_variables.bc
+- test/samples/current/v1/test020_sealed.bc
+- test/samples/current/v1/test021_parsing.bc
+- test/samples/current/v1/test022_default_symbols.bc
+- test/samples/current/v1/test023_execution_scope.bc
+- test/samples/current/v2/samples.json
+- test/samples/current/v2/test001_basic.bc
+- test/samples/current/v2/test002_different_root_key.bc
+- test/samples/current/v2/test003_invalid_signature_format.bc
+- test/samples/current/v2/test004_random_block.bc
+- test/samples/current/v2/test005_invalid_signature.bc
+- test/samples/current/v2/test006_reordered_blocks.bc
+- test/samples/current/v2/test007_scoped_rules.bc
+- test/samples/current/v2/test008_scoped_checks.bc
+- test/samples/current/v2/test009_expired_token.bc
+- test/samples/current/v2/test010_authorizer_scope.bc
+- test/samples/current/v2/test011_authorizer_authority_caveats.bc
+- test/samples/current/v2/test012_authority_caveats.bc
+- test/samples/current/v2/test013_block_rules.bc
+- test/samples/current/v2/test014_regex_constraint.bc
+- test/samples/current/v2/test015_multi_queries_caveats.bc
+- test/samples/current/v2/test016_caveat_head_name.bc
+- test/samples/current/v2/test017_expressions.bc
+- test/samples/current/v2/test018_unbound_variables_in_rule.bc
+- test/samples/current/v2/test019_generating_ambient_from_variables.bc
+- test/samples/current/v2/test020_sealed.bc
+- test/samples/current/v2/test021_parsing.bc
+- test/samples/current/v2/test022_default_symbols.bc
+- test/samples/current/v2/test023_execution_scope.bc
+- test/samples/current/v2/test024_third_party.bc
+- test/samples/current/v2/test025_check_all.bc
+- test/samples/current/v2/test026_public_keys_interning.bc
+- test/samples/current/v2/test027_integer_wraparound.bc
+- test/samples/current/v2/test028_expressions_v4.bc
+- test/samples/current/v2/test029_expired_token.bc
+- test/samples/current/v2/test030_period_has_expired.bc
+- test/samples/current/v2/test031_limit_expired_token.bc
 
 description:         Please see the README on GitHub at <https://github.com/Kapranov/nuuanu#readme>
 
@@ -140,6 +164,7 @@ tests:
       Spec.Auth.Bisque.Parser,
       Spec.Auth.Bisque.Quasiquoter,
       Spec.Auth.Bisque.Roundtrip,
+      Spec.Auth.Bisque.SampleReader,
       Spec.Auth.Bisque.ScopedExecutor,
       Spec.Auth.Bisque.Verification,
       Spec.Auth.Kailua.Crypto,
