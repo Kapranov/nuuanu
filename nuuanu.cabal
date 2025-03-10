@@ -117,8 +117,11 @@ library
       Data.String.Conversions
       Data.String.Strip
       Lib
+      Platform.Bisque
       Platform.HTTP
       Platform.JWT
+      Platform.Kailua
+      Platform.Types
       Websocket.Client
       Websocket.Server
   other-modules:
@@ -162,7 +165,7 @@ library
     , entropy
     , fakedata
     , filepath
-    , jose-jwt
+    , jose-jwt >=0.10.0
     , jsonifier
     , megaparsec
     , memory

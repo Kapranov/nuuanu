@@ -1,3 +1,4 @@
+allow-newer: true
 snapshot:
   url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/22/37.yaml
 packages:
@@ -5,3 +6,4 @@ packages:
 extra-deps:
   - validation-selective-0.2.0.0
   - text-display-0.0.5.2
+  - jose-jwt-0.10.0

@@ -1,89 +1,182 @@
-{-# LANGUAGE BlockArguments        #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PackageImports        #-}
-{-# LANGUAGE QuasiQuotes           #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# OPTIONS_GHC -Wall              #-}
-module Platform.JWT ( main
-                    , maxSaveFileSize
-                    , saveKeyLength
+{-# LANGUAGE OverloadedStrings #-}
+-- {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+-- {-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
+module Platform.JWT ( calculateExpiredTime
+                    , encodeDecodeRS256
+                    , encodeDecodeRS384
+                    , encodeDecodeRS512
+                    , getCurrentTimestamp
+                    , main
+                    , makeJwtClaims
+                    , makePayload
+                    , makeTokenRS256
+                    , privateJwkRS256
+                    , privateJwkRS384
+                    , privateJwkRS512
+                    , random_char
+                    , random_secret
+                    , verifyTokenRS256
                     ) where
 
-import Auth.Bisque ( Bisque
-                   , BisqueEncoding (RawBytes, UrlBase64)
-                   , Open
-                   , ParserConfig (..)
-                   , PublicKey
-                   , Sealed
-                   , SecretKey
-                   , Verified
-                   , addBlock
-                   , authorizeBisque
-                   , authorizer
-                   , block
-                   , blockContext
-                   , encodeHex
-                   , fromRevocationList
-                   , getRevocationIds
-                   , getSingleVariableValue
-                   , getVerifiedBisquePublicKey
-                   , mkBisque
-                   , newPublic
-                   , newSecret
-                   , parse
-                   , parseB64
-                   , parsePublicKey
-                   , parsePublicKeyHex
-                   , parseSecretKey
-                   , parseSecretKeyHex
-                   , parseWith
-                   , query
-                   , queryAuthorizerFacts
-                   , seal
-                   , serialize
-                   , serializeB64
-                   , serializePublicKey
-                   , serializePublicKeyHex
-                   , serializeSecretKey
-                   , serializeSecretKeyHex
-                   , toPublic
-                   )
+import Control.Monad         (replicateM)
+import Data.Text             ( Text
+                             , pack
+                             )
+import Data.Text.Encoding    (encodeUtf8)
+import Data.UUID             ( UUID
+                             , toText
+                             )
+import Data.UUID.V4          (nextRandom)
+import Jose.Jwa              ( Alg(Signed, Encrypted)
+                             , Enc ( A128CBC_HS256
+                                   , A128GCM
+                                   , A192CBC_HS384
+                                   , A192GCM
+                                   , A256CBC_HS512
+                                   , A256GCM
+                                   )
+                             , JweAlg ( A128KW
+                                      , A192KW
+                                      , A256KW
+                                      , RSA1_5
+                                      , RSA_OAEP
+                                      , RSA_OAEP_256
+                                      )
+                             , JwsAlg( ES256
+                                     , ES384
+                                     , ES512
+                                     , EdDSA
+                                     , HS256
+                                     , HS384
+                                     , HS512
+                                     , RS256
+                                     , RS384
+                                     , RS512
+                                     )
+                             )
+import Jose.Jwe              as JWE
+import Jose.Jwk              ( Jwk
+                             --, Jwk(SymmetricJwk)
+                             , KeyUse(Sig)
+                             --, KeyId
+                             , generateRsaKeyPair
+                             , generateSymmetricKey
+                             )
+import Jose.Jws              as JWS
+import Jose.Jwt              ( IntDate (..)
+                             , Jwt (..)
+                             , JwtClaims (..)
+                             , JwtContent (..)
+                             , JwtEncoding (..)
+                             , JwtError (..)
+                             , KeyId (..)
+                             , Payload (..)
+                             , decode
+                             , encode
+                             )
+import System.Random         (randomRIO)
+import Data.Time.Clock       ( getCurrentTime
+                             , addUTCTime
+                             )
+import Data.Time.Clock.POSIX ( getPOSIXTime
+                             , utcTimeToPOSIXSeconds
+                             )
+import Data.Aeson            as A
+import Data.ByteString       (ByteString)
+import Data.ByteString.Lazy  (toStrict)
+import Crypto.PubKey.RSA     as RSA
+import Crypto.PubKey.Ed25519 as Ed25519
+import Crypto.PubKey.Ed448   as Ed448
 
-import "crypton" Crypto.Random                        (getRandomBytes)
-import Control.Monad                                  (replicateM)
-import Data.ByteString                                (ByteString)
-import qualified Data.ByteString        as ByteString ( readFile
-                                                      , writeFile
-                                                      )
-import qualified Data.ByteString.Base64 as Base64     ( decode
-                                                      , encode
-                                                      )
-import Data.Functor                                   (($>))
-import Data.Int                                       (Int64)
-import Data.List.NonEmpty                             (toList)
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict                      as Map
-import Data.Text (Text)
-import qualified Data.Text                            as Text (pack)
-import Data.Time
-import Data.Time.Clock.POSIX                          ( getPOSIXTime
-                                                      , utcTimeToPOSIXSeconds
-                                                      )
-import Data.UUID
-import Platform.HTTP                                  (newUUID)
-import Prelude hiding                                 (lookup, pred)
-import System.Random
--- import Jose.Jwt
+-- import Crypto.PubKey.RSA     ( PrivateKey (..) , PublicKey (..))
+-- import Crypto.PubKey.Ed25519 (SecretKey, PublicKey, toPublic, generateSecretKey)
 
--- | Generate and Decode JWTs in Haskell with jose-jwt
--- | specifications: JWE, JWK, JWS and JWT
--- | JSON Object Signing and Encryption (JOSE)
--- | JSON Web Algorithms (JWA)
--- | JSON Web Encryption (JWE)
--- | JSON Web Key (JWK)
--- | JSON Web Signature (JWS)
--- | JSON Web Token (JWT)
+
+-- | Generate and Decode JOSE-JWT
+-- | specifications: JWA, JWE, JWK, JWS and JWT
+-- | JOSE - JSON Object Signing and Encryption
+-- |  JWA - JSON Web Algorithms
+-- |  JWE - JSON Web Encryption
+-- |  JWK - JSON Web Key
+-- |  JWS - JSON Web Signature
+-- |  JWT - JSON Web Token
 --
+-- | Jose.JWA
+-- Alg -> Signed    -> JwsAlg -> None, HS256, HS384, HS512, RS256, RS384, RS512, ES256, ES384, ES512, EdDSA
+-- Alg -> Encrypted -> JweAlg -> RSA1_5, RSA_OAEP, RSA_OAEP_256, A128KW, A192KW, A256KW
+-- Enc ->                        A128CBC_HS256, A192CBC_HS384, A256CBC_HS512, A128GCM, A192GCM, A256GCM
+--
+-- | Jose.JWE
+-- jwkEncode
+-- jwkDecode
+-- rsaEncode
+-- rsaDecode
+--
+-- | Jose.Jwk
+-- EcCurve (..)
+-- KeyUse (..)
+-- KeyId
+-- Jwk (..)
+-- JwkSet (..)
+-- isPublic
+-- isPrivate
+-- jwkId
+-- jwkUse
+-- canDecodeJws
+-- canDecodeJwe
+-- canEncodeJws
+-- canEncodeJwe
+-- generateRsaKeyPair
+-- generateSymmetricKey
+--
+-- | Jose.Jws
+-- jwkEncode
+-- hmacEncode
+-- hmacDecode
+-- rsaEncode
+-- rsaDecode
+-- ecDecode
+-- ed25519Encode
+-- ed25519Decode
+-- ed448Encode
+-- ed448Decode
+--
+-- | Jose.Jwt
+-- Jwt (..)
+-- Jwe
+-- Jws
+-- JwtClaims (..)
+-- JwtHeader (..)
+-- JwsHeader (..)
+-- JweHeader (..)
+-- JwtContent (..)
+-- JwtEncoding (..)
+-- JwtError (..)
+-- IntDate (..)
+-- Payload (..)
+-- KeyId (..)
+-- parseHeader
+-- encodeHeader
+-- defJwsHdr
+-- defJweHdr
+--
+-- | There are three classes of JWT Claim Names:
+-- | Registered Claim Names - "registered claims"
+-- | Public     Claim Names - "public claims"
+-- | Private    Claim Names - "private claims"
+--
+-- | JWT Claims
+-- aud  [Text] Audience
+-- exp   Time  Expiration
+-- iat   Time  Issued At
+-- iss   Text  Issuer
+-- jti   Text  JWT ID
+-- nbf   Time  Not Before
+-- sub   Text  Subject
+--
+-- | JOSE Header
+-- type - Type Header parameter
+-- cty  - Content Type  Header parameter
 -- | Access token
 -- Claim  Value
 -- sub    User ID
@@ -92,7 +185,6 @@ import System.Random
 -- aud    "access" to identify this as an access token
 --
 -- | Refresh token
--- Claim  Value
 -- sub    User ID
 -- iat    The current time
 -- exp    1 day
@@ -112,393 +204,662 @@ random_secret :: Int -> IO String
 random_secret num = do
   replicateM num (randomRIO ('a','z'))
 
--- | BEGIN Bisque Token Authorization System
---
--- | 1,2,3. Create a root key (keypair - private/public keys)
-genKeys :: IO ()
-genKeys = do
-  sk <- newSecret
-  let pk = toPublic sk
-  let sk' = serializeSecretKeyHex sk
-  let pk' = serializePublicKeyHex pk
-  putStrLn "Generating a new random keypair"
-  print ("Private key: " <> sk')
-  print ("Public  key: " <> pk')
-
--- | 4. Create a token
-buildToken :: SecretKey -> Text -> IO (Bisque Open Verified)
-buildToken sk value = do
-  now <- getCurrentTime
-  let expire = addUTCTime 36000 now
-  mkBisque sk [block|user_id(${value});check if time($time),$time < ${expire};|]
-
-buildTokenAddContext :: SecretKey -> Text -> Text -> IO (Bisque Open Verified)
-buildTokenAddContext sk value content = do
-  now <- getCurrentTime
-  let expire = addUTCTime 36000 now
-  let context = blockContext content
-  let authority = [block|user_id(${value});check if time($time),$time < ${expire};|] <> context
-  mkBisque sk authority
-
--- | 5. Create an authorize
-myCheck :: Text -> Bisque p Verified -> IO Bool
-myCheck value bisque = do
-  now <- getCurrentTime
-  result <- authorizeBisque bisque [authorizer|time(${now});allow if user_id(${value});|]
-  case result of
-    Left _  -> pure False
-    Right _ -> pure True
-
--- | 6. Attenuate a token
-addTTL :: UTCTime -> Bisque Open c -> IO (Bisque Open c)
-addTTL ttl bisque = addBlock [block|check if time($time),$time < ${ttl};|] bisque
-
--- | 7. Seal a token
-sealBisque :: Bisque Open c -> Bisque Sealed c
-sealBisque bisque = seal bisque
-
--- | 8. Reject revoked tokens
-viaParseWith :: Either a b -> IO Bool
-viaParseWith p = do
-  case p of
-    Left _ -> pure False
-    Right _ -> pure True
-
-encodeBisque :: SecretKey -> Text -> UTCTime -> IO ByteString
-encodeBisque sk value ttl = do
-  now <- getCurrentTime
-  let expire = addUTCTime 36000 now
-  let authority = [block|user_id(${value});check if current_time($time),$time < ${expire};|]
-  bisque <- mkBisque sk authority
-  let block1 = [block|check if current_time($time),$time < ${ttl};|]
-  newBisque <- addBlock block1 bisque
-  pure $ serialize newBisque
-
-encodeBisque64 :: SecretKey -> Text -> UTCTime -> IO ByteString
-encodeBisque64 sk value ttl = do
-  now <- getCurrentTime
-  let expire = addUTCTime 36000 now
-  let authority = [block|user_id(${value});check if current_time($time),$time < ${expire};|]
-  bisque <- mkBisque sk authority
-  let block1 = [block|check if current_time($time),$time < ${ttl};|]
-  newBisque <- addBlock block1 bisque
-  pure $ serializeB64 newBisque
-
-verification :: PublicKey -> ByteString -> Text -> IO Bool
-verification pk serialized value = do
-  now <- getCurrentTime
-  bisque <- either (fail . show) pure $ parse pk serialized
-  let authorizer' = [authorizer|current_time(${now});allow if user_id(${value});|]
-  result <- authorizeBisque bisque authorizer'
-  case result of
-    Left e  -> print e $> False
-    Right _ -> pure True
-
-verification64 :: PublicKey -> ByteString -> Text -> IO Bool
-verification64 pk serialized value = do
-  now <- getCurrentTime
-  bisque <- either (fail . show) pure $ parseB64 pk serialized
-  let authorizer' = [authorizer|current_time(${now});allow if user_id(${value});|]
-  result <- authorizeBisque bisque authorizer'
-  case result of
-    Left e  -> print e $> False
-    Right _ -> pure True
-
-parseBisque :: PublicKey -> ByteString -> IO Bool
-parseBisque pk encodedBisque =  do
-  let parsingOptions =
-        ParserConfig
-          { encoding = RawBytes
-          , isRevoked = const $ pure False
-          , getPublicKey = pure pk
-          }
-  result <- parseWith parsingOptions encodedBisque
-  viaParseWith result
-
-parseBisque64 :: PublicKey -> ByteString -> IO Bool
-parseBisque64 pk encodedBisque =  do
-  let parsingOptions =
-        ParserConfig
-          { encoding = UrlBase64
-          , isRevoked = const $ pure False
-          , getPublicKey = pure pk
-          }
-  result <- parseWith parsingOptions encodedBisque
-  viaParseWith result
-
-pullRevocationIds :: (Bisque Open Verified) -> [Text]
-pullRevocationIds bisque = [encodeHex x | x <- toList (getRevocationIds bisque)]
-
-parseBisque64' :: (Foldable t) => PublicKey -> ByteString -> t ByteString -> IO Bool
-parseBisque64' pk encodedBisque revokedIds = do
-  let parsingOptions =
-        ParserConfig
-          { encoding = UrlBase64
-          , getPublicKey = \_ -> pk
-          , isRevoked = fromRevocationList revokedIds
-          }
-  result <- parseWith parsingOptions encodedBisque
-  case result of
-    Left _ -> pure False
-    Right _ -> pure True
-
--- | 9. Query data from the authorizer
-checkBisque :: Bisque proof Verified -> Text -> IO Text
-checkBisque bisque value = do
-  now <- getCurrentTime
-  result <- authorizeBisque bisque [authorizer|time(${now});allow if user_id(${value});|]
-  case result of
-    Left _ -> pure "msg#1 The user ID you entered does not exist"
-    Right success ->
-      case getSingleVariableValue (queryAuthorizerFacts success [query|user_id($user_id)|]) "user_id" of
-        Just idx -> pure idx
-        Nothing -> pure "msg#2 The user ID you entered does not exist"
-
--- | 10. Inspect a token    - `NONE`
--- | END Bisque Token Authorization System
-
-nanosSinceEpoch :: UTCTime -> Int64
-nanosSinceEpoch =
-  floor . (1e9 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
-
-data MyDay = Monday | Tuesday | Wednesday | Thursday | Friday | Saturday | Sunday
-  deriving (Eq, Show, Enum)
-
-getDayFromTimestamp :: Integer -> MyDay
-getDayFromTimestamp ts = getDayFromIndex .
-                            fromIntegral .
-                            calculateDayIndex .
-                            calculateElapsedDays $
-                            ts
-
-getDayFromIndex :: Int -> MyDay
-getDayFromIndex x
-  | x < 0 || x > 6 = error "Index must be between 0 and 6"
-  | otherwise = toEnum x :: MyDay
-
 getCurrentTimestamp :: IO Integer
 getCurrentTimestamp = (round `fmap` getPOSIXTime)
 
-calculateElapsedDays :: Integer -> Integer
-calculateElapsedDays ts = ts `div` 86400
+calculateExpiredTime :: Integer -> Integer
+calculateExpiredTime ts = ts + 864000
 
-calculateDayIndex :: Integer -> Integer
-calculateDayIndex x = (x + 3) `mod` 7
+privateJwkRS256 :: Text -> IO Jwk
+privateJwkRS256 key = do
+  (_, privKey) <- generateRsaKeyPair 256 (KeyId key) Sig (Just (Signed RS256))
+  return privKey
 
-data User = User
-  { userId        :: Int
-  , userFirstName :: String
-  , userLastName  :: String
-  , createdAt     :: UTCTime
-  } deriving (Eq, Show)
+privateJwkRS384 :: Text -> IO Jwk
+privateJwkRS384 key = do
+  (_, privKey) <- generateRsaKeyPair 384 (KeyId key) Sig (Just (Signed RS384))
+  return privKey
 
-allUsers :: [User]
-allUsers = [ User 1 "Bob"       "Price"   (UTCTime (fromGregorian 2016 7 18) (timeOfDayToTime $ TimeOfDay 1 15 43))
-           , User 2 "Brandon"   "Darby"   (UTCTime (fromGregorian 2017 5 17) (timeOfDayToTime $ TimeOfDay 2 48 38))
-           , User 3 "David"     "Pollak"  (UTCTime (fromGregorian 2018 2 16) (timeOfDayToTime $ TimeOfDay 3 16 29))
-           , User 4 "Elizabeth" "Weibel"  (UTCTime (fromGregorian 2019 4 15) (timeOfDayToTime $ TimeOfDay 4 29 11))
-           , User 5 "Joshua"    "Klein"   (UTCTime (fromGregorian 2020 2 14) (timeOfDayToTime $ TimeOfDay 5 30 56))
-           , User 6 "Olivia"    "Rondeau" (UTCTime (fromGregorian 2021 8 13) (timeOfDayToTime $ TimeOfDay 6 42 31))
-           , User 7 "Pam"       "Key"     (UTCTime (fromGregorian 2022 3 12) (timeOfDayToTime $ TimeOfDay 7 28 47))
-           , User 8 "Paul"      "Bois"    (UTCTime (fromGregorian 2023 6 11) (timeOfDayToTime $ TimeOfDay 8 54 21))
-           , User 9 "Rebecca"   "Mansour" (UTCTime (fromGregorian 2024 1 10) (timeOfDayToTime $ TimeOfDay 9 21 38))
-           ]
+privateJwkRS512 :: Text -> IO Jwk
+privateJwkRS512 key = do
+  (_, privKey) <- generateRsaKeyPair 512 (KeyId key) Sig (Just (Signed RS512))
+  return privKey
 
-idx_userId :: [UUID]
-idx_userId = newUUID
+makeJwtClaims :: UUID -> IO JwtClaims
+makeJwtClaims userIdx = do
+  currentUTC <- getCurrentTime
+  let currentTime = IntDate $ utcTimeToPOSIXSeconds $ currentUTC
+  let laterDate = IntDate $ utcTimeToPOSIXSeconds $ addUTCTime (60 * 60 * 24 * 14) currentUTC
+  return $ JwtClaims Nothing
+                     (Just $ toText userIdx)
+                     Nothing
+                     (Just laterDate)
+                     Nothing
+                     (Just currentTime)
+                     Nothing
 
-newtype UserId = UserId UUID deriving (Eq, Show)
+makePayload :: JwtClaims -> Payload
+makePayload claims = Claims $ toStrict $ A.encode claims
 
-users :: [(Text, UserId)]
-users =
-  [ ("admin@example.org", UserId $ read $ show $ idx_userId !! 0)
-  , ("test1@example.org", UserId $ read $ show $ idx_userId !! 1)
-  , ("test2@example.org", UserId $ read $ show $ idx_userId !! 2)
-  , ("test3@example.org", UserId $ read $ show $ idx_userId !! 3)
-  , ("test4@example.org", UserId $ read $ show $ idx_userId !! 4)
-  , ("test5@example.org", UserId $ read $ show $ idx_userId !! 5)
-  , ("test6@example.org", UserId $ read $ show $ idx_userId !! 6)
-  , ("test7@example.org", UserId $ read $ show $ idx_userId !! 7)
-  , ("test8@example.org", UserId $ read $ show $ idx_userId !! 8)
-  ]
+makeTokenRS256 :: UUID -> Jwk -> JwsAlg -> IO ()
+makeTokenRS256 userIdx jwk jwsAlg = do
+  claims <- makeJwtClaims userIdx
+  let encAlg  = JwsEncoding jwsAlg
+      payload = makePayload claims
+  eitherJwt <- Jose.Jwt.encode [jwk] encAlg payload
+  case eitherJwt of
+    Left err -> print err
+    Right (Jwt {unJwt = token}) -> print token
 
-getUsers :: Map Text UserId
-getUsers = Map.fromList users
+verifyTokenRS256 :: Text -> Jwk -> IO Bool
+verifyTokenRS256 token jwk = do
+  let encAlg  = JwsEncoding RS256
+  let jwt = (Jwt {unJwt = (encodeUtf8 token)})
+  eitherContent <- Jose.Jwt.decode [jwk] (Just encAlg) (unJwt jwt)
+  case eitherContent of
+    Left  (KeyError _)     -> pure False
+    Left  (BadAlgorithm _) -> pure False
+    Left  (BadDots _)      -> pure False
+    Left  (BadHeader _)    -> pure False
+    Left  (BadClaims)      -> pure False
+    Left  (BadSignature)   -> pure False
+    Left  (BadCrypto)      -> pure False
+    Left  (Base64Error _)  -> pure False
+    Right (Jws (_, _))     -> pure True
+    Right (Unsecured _)    -> pure True
+    Right (Jwe _)          -> pure True
 
-getUserId :: String -> String
-getUserId email = do
-  let found = Map.lookup (Text.pack email) getUsers
-  case found of
-    Just (UserId idx) ->
-      show idx
-    Nothing ->
-      "The user ID you entered does not exist"
+encodeDecodeRS256 :: UUID -> Text -> IO ()
+encodeDecodeRS256 userIdx key = do
+  jwk    <- privateJwkRS256 key
+  claims <- makeJwtClaims userIdx
+  let encAlg  = JwsEncoding RS256
+      payload = makePayload claims
+  eitherJwt <- Jose.Jwt.encode [jwk] encAlg payload
+  case eitherJwt of
+    Left err -> print err
+    Right jwt -> do
+      eitherContent <- Jose.Jwt.decode [jwk] (Just encAlg) (unJwt jwt)
+      case eitherContent of
+        Left  (KeyError ta)     -> print ta
+        Left  (BadAlgorithm tb) -> print tb
+        Left  (BadDots tc)      -> print tc
+        Left  (BadHeader td)    -> print td
+        Left  (BadClaims)       -> return ()
+        Left  (BadSignature)    -> return ()
+        Left  (BadCrypto)       -> return ()
+        Left  (Base64Error th)  -> print th
+        Right (Jws (_, bs))     -> print bs
+        Right (Unsecured tx)    -> print tx
+        Right (Jwe tz)          -> print tz
 
-getUserNum :: Int -> Maybe UUID
-getUserNum num | num < 9 =
-  case Map.elemAt num getUsers of
-    (_email,UserId uuid) -> Just uuid
-getUserNum _ = Nothing
+encodeDecodeRS384 :: UUID -> Text -> IO ()
+encodeDecodeRS384 userIdx key = do
+  jwk    <- privateJwkRS384 key
+  claims <- makeJwtClaims userIdx
+  let encAlg  = JwsEncoding RS384
+      payload = makePayload claims
+  eitherJwt <- Jose.Jwt.encode [jwk] encAlg payload
+  case eitherJwt of
+    Left err -> print err
+    Right jwt -> do
+      eitherContent <- Jose.Jwt.decode [jwk] (Just encAlg) (unJwt jwt)
+      case eitherContent of
+        Left  (KeyError ta)     -> print ta
+        Left  (BadAlgorithm tb) -> print tb
+        Left  (BadDots tc)      -> print tc
+        Left  (BadHeader td)    -> print td
+        Left  (BadClaims)       -> return ()
+        Left  (BadSignature)    -> return ()
+        Left  (BadCrypto)       -> return ()
+        Left  (Base64Error th)  -> print th
+        Right (Jws (_, bs))     -> print bs
+        Right (Unsecured tx)    -> print tx
+        Right (Jwe tz)          -> print tz
 
-getUserNum' :: Int -> Maybe UUID
-getUserNum' num | num < 9 =
-                  case (Map.elemAt num getUsers) of
-                    (_email, UserId uuid) -> Just uuid
-                | otherwise = Nothing
+encodeDecodeRS512 :: UUID -> Text -> IO ()
+encodeDecodeRS512 userIdx key = do
+  jwk    <- privateJwkRS512 key
+  claims <- makeJwtClaims userIdx
+  let encAlg  = JwsEncoding RS512
+      payload = makePayload claims
+  eitherJwt <- Jose.Jwt.encode [jwk] encAlg payload
+  case eitherJwt of
+    Left err -> print err
+    Right jwt -> do
+      eitherContent <- Jose.Jwt.decode [jwk] (Just encAlg) (unJwt jwt)
+      case eitherContent of
+        Left  (KeyError ta)     -> print ta
+        Left  (BadAlgorithm tb) -> print tb
+        Left  (BadDots tc)      -> print tc
+        Left  (BadHeader td)    -> print td
+        Left  (BadClaims)       -> return ()
+        Left  (BadSignature)    -> return ()
+        Left  (BadCrypto)       -> return ()
+        Left  (Base64Error th)  -> print th
+        Right (Jws (_, bs))     -> print bs
+        Right (Unsecured tx)    -> print tx
+        Right (Jwe tz)          -> print tz
 
-ifMaybe :: (Int -> Bool) -> Int -> Maybe String
-ifMaybe pred num =
-  if pred num
-  then (getUserNum' num) >>= return . show
-  else Nothing
+myClaims :: ByteString
+myClaims = "helloWorld"
 
-fromIfMaybe :: a -> Maybe a -> a
-fromIfMaybe def Nothing = def
-fromIfMaybe _ (Just n) = n
+myKeyId :: Text
+myKeyId = "My Keywrap Key"
 
-admin :: UserId
-admin = UserId $ read $ show $ idx_userId !! 0
+forKeyId :: ByteString
+forKeyId = "My Keywrap Key"
 
-data Secret = Secret ByteString deriving (Eq, Show)
+myInt :: Int
+myInt = 16
 
-generateSecret :: IO Secret
-generateSecret = Secret <$> getRandomBytes 32
+rsaModulus :: Integer
+rsaModulus = 20446702916744654562596343388758805860065209639960173505037453331270270518732245089773723012043203236097095623402044690115755377345254696448759605707788965848889501746836211206270643833663949992536246985362693736387185145424787922241585721992924045675229348655595626434390043002821512765630397723028023792577935108185822753692574221566930937805031155820097146819964920270008811327036286786392793593121762425048860211859763441770446703722015857250621107855398693133264081150697423188751482418465308470313958250757758547155699749157985955379381294962058862159085915015369381046959790476428631998204940879604226680285601
 
-writeSecret :: IO ByteString
-writeSecret = do
-  let secret = generateSecret
-  (Secret bytes) <- secret
-  let pwd = Base64.encode bytes
-  pure pwd
+rsaExponent :: Integer
+rsaExponent = 65537
 
-readSecret :: ByteString -> IO Secret
-readSecret pwd = do
-  case Base64.decode pwd of
-    Left err -> error err
-    Right bytes -> return $ Secret bytes
+rsaPrivateExponent :: Integer
+rsaPrivateExponent = 2358310989939619510179986262349936882924652023566213765118606431955566700506538911356936879137503597382515919515633242482643314423192704128296593672966061810149316320617894021822784026407461403384065351821972350784300967610143459484324068427674639688405917977442472804943075439192026107319532117557545079086537982987982522396626690057355718157403493216553255260857777965627529169195827622139772389760130571754834678679842181142252489617665030109445573978012707793010592737640499220015083392425914877847840457278246402760955883376999951199827706285383471150643561410605789710883438795588594095047409018233862167884701
 
-writePathSecret :: FilePath -> Secret -> IO ()
-writePathSecret path (Secret bytes) = ByteString.writeFile path (Base64.encode bytes)
+rsaPrivateKey :: RSA.PrivateKey
+rsaPrivateKey = RSA.PrivateKey
+  { RSA.private_pub = rsaPublicKey
+  , RSA.private_d = rsaPrivateExponent
+  , RSA.private_q = 0
+  , RSA.private_p = 0
+  , RSA.private_dP = 0
+  , RSA.private_dQ = 0
+  , RSA.private_qinv = 0
+  }
 
-readPathSecret :: FilePath -> IO Secret
-readPathSecret path = do
-  secret <- ByteString.readFile path
-  case Base64.decode secret of
-    Left err -> error err
-    Right bytes -> return $ Secret bytes
-
-data Optional a = Only a | Empty deriving Show
-
-getVal :: Int -> Optional Int
-getVal num = Only num
+rsaPublicKey :: RSA.PublicKey
+rsaPublicKey = RSA.PublicKey
+  { RSA.public_size = 256
+  , RSA.public_n = rsaModulus
+  , RSA.public_e = rsaExponent
+  }
 
 main :: IO ()
 main = do
-  -- | Customer Maybe function
-  case getVal 23 of
-    Only val -> putStrLn $ show val
-    Empty -> putStrLn "Something went wrong!"
-  -- | BEGIN Dates and Times
-  getCurrentTime >>= return.(formatTime defaultTimeLocale "%D %H:%M:%S") >>= putStrLn.show
-  let epoch = read "1970-01-01 00:00:00 UTC"
-  getCurrentTime >>= print
-  now <- getCurrentTime :: IO UTCTime
-  print $ nanosSinceEpoch now
-  putStrLn ("The time is " ++ show now)
-  print $ (utctDay now) `diffDays` (utctDay epoch)
-  today <- fmap utctDay getCurrentTime
-  let (year, _, _) = toGregorian today
-  let days = diffDays today (fromGregorian year 0 0)
-  putStrLn $ "Today is day " ++ show days ++ " of the current year"
   -- | Generate custom secretKey
+  putStrLn $ "---| BEGIN |-------------------------------------"
   print $ saveKeyLength
   print $ maxSaveFileSize
-  print =<< random_char
-  print =<< random_secret 64
-  -- | BEGIN Bisque - create a key pair 'SecretKey' and 'PublicKey'
-  let userUUID = toText $ newUUID !! 0
-  sk <- newSecret
-  token <- buildToken sk userUUID
-  let pk = toPublic sk
-  print $ serialize token
-  checkBisque token userUUID >>= print
-  result <- authorizeBisque token [authorizer|allow if user_id(${userUUID});|]
-  putStrLn $ "---| BEGIN singleBlock |-------------------------------------"
-  print result
-  putStrLn $ "---| END singleBlock   |-------------------------------------"
-  -- | Will be added a new context value 'valid_day'
-  _ <- buildTokenAddContext sk userUUID "valid_day"
-  -- | Will print the hex-encoded secret key
-  print $ serializeSecretKeyHex sk
-  -- | Will print the hex-encoded public key
-  print $ serializePublicKeyHex pk
-  print $ serializeSecretKey sk
-  print $ serializePublicKey pk
-  parsedSk <- parseSecretKey <$> serializeSecretKey <$> newSecret
-  case parsedSk of
-    Just _ -> return ()
-    Nothing -> return ()
-  parsedSkHex <- parseSecretKeyHex <$> serializeSecretKey <$> newSecret
-  case parsedSkHex of
-    Just _ -> return ()
-    Nothing -> return ()
-  parsedPk <- parsePublicKey <$> serializePublicKey <$> toPublic <$> newSecret
-  case parsedPk of
-    Just _ -> return ()
-    Nothing -> return ()
-  parsedPkHex <- parsePublicKeyHex <$> serializePublicKey <$> toPublic <$> newSecret
-  case parsedPkHex of
-    Just _ -> return ()
-    Nothing -> return ()
-  -- | The current time creates
-  current <- truncate @_ @Int64 . (* 1000) <$> getPOSIXTime
-  let expirationTime = current + 864000
-  -- | Will print round up numbers to integer
-  print $ show $ expirationTime
-  ts <- getCurrentTimestamp
-  print $ getDayFromTimestamp ts
-  -- | BEGIN Token
-  genKeys
-  newPublic >>= print
-  let val = Text.pack ("1234")
-  let new_val = Text.pack ("123456789")
-  let ttl = addUTCTime 36000 now
-  bisque <- buildToken sk val
-  print $ serializePublicKey $ getVerifiedBisquePublicKey bisque
-  print $ serializePublicKeyHex  $ getVerifiedBisquePublicKey bisque
-  myCheck val bisque >>= print
-  myCheck new_val bisque >>= print
-  bisque_add_blocked <- addTTL ttl bisque
-  myCheck val bisque_add_blocked >>= print
-  let new_ttl = addUTCTime 360 now
-  token_add_blocked <- addTTL new_ttl token
-  myCheck val token_add_blocked >>= print
-  print $ sealBisque bisque
-  checkBisque bisque val >>= print
-  checkBisque token new_val >>= print
-  token_enc <- encodeBisque sk val ttl
-  token_enc64 <- encodeBisque64 sk val ttl
-  verification pk token_enc val >>= print
-  verification64 pk token_enc64 val >>= print
-  verification pk token_enc new_val >>= print
-  verification64 pk token_enc64 new_val >>= print
-  parseBisque pk token_enc >>= print
-  parseBisque64 pk token_enc64 >>= print
-  let revocationIds = toList $ getRevocationIds bisque
-  print $ pullRevocationIds bisque
-  parseBisque64' pk token_enc64 revocationIds >>= print
-  -- | BEGIN
-  print admin
-  print =<< generateSecret
-  print allUsers
-  putStrLn $ getUserId "admin@example.org"
-  case (getUserNum 0) of
-    Just _ -> return ()
-    Nothing -> return ()
-  case (ifMaybe (const True) 0) of
-    Just idx -> putStrLn $ "user_id: " ++ idx
-    Nothing -> return ()
-  print $ fromIfMaybe "number is out of range" $ ifMaybe (const True) 9
-  secret <- readSecret <$> writeSecret >>= \pwd -> pwd
-  writePathSecret "/tmp/secrets" secret
-  readPathSecret "/tmp/secrets" >>= print
+  random_char >>= print
+  random_secret 64 >>= print
+  -- | Generate Jose JWT
+  putStrLn $ "---| BEGIN |-------------------------------------\n\n\n"
+  currentTime <- getCurrentTimestamp
+  userIdx <- nextRandom
+  let secretMacKey = encodeUtf8 $ pack "my_private_key"
+  let expirationTime = calculateExpiredTime currentTime
+  let claims = JwtClaims { jwtAud = Nothing
+                         , jwtExp = Just $ IntDate $ fromIntegral expirationTime
+                         , jwtIat = Just $ IntDate $ fromIntegral currentTime
+                         , jwtIss = Nothing
+                         , jwtJti = Nothing
+                         , jwtNbf = Nothing
+                         , jwtSub = Just $ toText userIdx
+                         }
+  let _tokenHS256 = JWS.hmacEncode HS256 secretMacKey myClaims
+  let _tokenHS384 = JWS.hmacEncode HS384 secretMacKey myClaims
+  let _tokenHS512 = JWS.hmacEncode HS512 secretMacKey myClaims
+
+  Right (Jwt _tokenRS256) <- JWS.rsaEncode RS256 rsaPrivateKey myClaims
+  Right (Jwt _tokenRS384) <- JWS.rsaEncode RS384 rsaPrivateKey myClaims
+  Right (Jwt _tokenRS512) <- JWS.rsaEncode RS512 rsaPrivateKey myClaims
+
+  sk_for_Ed25519 <- Ed25519.generateSecretKey
+  sk_for_Ed448 <- Ed448.generateSecretKey
+
+  let pk_for_Ed25519 = Ed25519.toPublic sk_for_Ed25519
+  let pk_for_Ed448 = Ed448.toPublic sk_for_Ed448
+
+  let _tokenEd25519 = ed25519Encode sk_for_Ed25519 pk_for_Ed25519 myClaims
+  let _tokenEd448 = ed448Encode sk_for_Ed448 pk_for_Ed448 myClaims
+
+  putStrLn $ "---| BEGIN Token ES256 A128KW A128CBC_HS256 |---------"
+  keyES256 <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256))
+  Right (Jwt jwt1) <- JWE.jwkEncode A128KW A128CBC_HS256 keyES256 (Claims myClaims)
+  Right (Jwe (_, msg1)) <- JWE.jwkDecode keyES256 jwt1
+  if myClaims == msg1 then print msg1 else return ()
+  Right (Jwt jwt2) <- JWE.rsaEncode RSA_OAEP A256GCM rsaPublicKey myClaims
+  Right (_, msg2) <- JWE.rsaDecode rsaPrivateKey jwt2
+  if myClaims == msg2 then print msg2 else return ()
+  case JWS.hmacEncode HS256 forKeyId myClaims of
+    Right (Jwt jwt3) ->
+      case JWS.hmacDecode forKeyId jwt3 of
+        Right (_, val) ->
+          if myClaims == val then print val else return ()
+        Left err ->
+          print err
+    Left err ->
+      print err
+  putStrLn $ "---| END   Token |------------------------------------\n"
+  let _ = JWS.hmacEncode HS256 forKeyId myClaims
+  let _ = JWS.hmacEncode HS384 forKeyId myClaims
+  let _ = JWS.hmacEncode HS512 forKeyId myClaims
+  _ <- JWE.rsaEncode RSA1_5       A128CBC_HS256 rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA1_5       A128GCM       rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA1_5       A192CBC_HS384 rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA1_5       A192GCM       rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA1_5       A256CBC_HS512 rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA1_5       A256GCM       rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA_OAEP     A128CBC_HS256 rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA_OAEP     A128GCM       rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA_OAEP     A192CBC_HS384 rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA_OAEP     A192GCM       rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA_OAEP     A256CBC_HS512 rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA_OAEP     A256GCM       rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA_OAEP_256 A128CBC_HS256 rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA_OAEP_256 A128GCM       rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA_OAEP_256 A192CBC_HS384 rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA_OAEP_256 A192GCM       rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA_OAEP_256 A256CBC_HS512 rsaPublicKey myClaims
+  _ <- JWE.rsaEncode RSA_OAEP_256 A256GCM       rsaPublicKey myClaims
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A128KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A128KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A128KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A128KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A128KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A128KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A192KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A192KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A192KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A192KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A192KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A192KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A256KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A256KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A256KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A256KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A256KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode A256KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA1_5       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA1_5       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA1_5       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA1_5       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA1_5       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA1_5       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A128KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A128KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A128KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A128KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A128KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A128KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A192KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A192KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A192KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A192KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A192KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A192KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A256KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A256KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A256KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A256KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A256KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode A256KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA1_5       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA1_5       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA1_5       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA1_5       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA1_5       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA1_5       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A128KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A128KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A128KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A128KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A128KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A128KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A192KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A192KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A192KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A192KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A192KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A192KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A256KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A256KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A256KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A256KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A256KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode A256KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA1_5       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA1_5       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA1_5       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA1_5       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA1_5       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA1_5       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed ES512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A128KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A128KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A128KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A128KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A128KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A128KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A192KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A192KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A192KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A192KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A192KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A192KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A256KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A256KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A256KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A256KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A256KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode A256KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA1_5       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA1_5       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA1_5       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA1_5       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA1_5       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA1_5       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed EdDSA)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A128KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A128KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A128KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A128KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A128KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A128KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A192KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A192KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A192KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A192KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A192KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A192KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A256KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A256KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A256KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A256KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A256KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode A256KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA1_5       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA1_5       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA1_5       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA1_5       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA1_5       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA1_5       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A128KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A128KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A128KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A128KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A128KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A128KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A192KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A192KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A192KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A192KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A192KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A192KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A256KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A256KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A256KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A256KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A256KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode A256KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA1_5       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA1_5       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA1_5       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA1_5       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA1_5       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA1_5       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A128KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A128KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A128KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A128KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A128KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A128KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A192KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A192KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A192KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A192KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A192KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A192KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A256KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A256KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A256KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A256KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A256KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode A256KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA1_5       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA1_5       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA1_5       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA1_5       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA1_5       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA1_5       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed HS512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A128KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A128KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A128KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A128KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A128KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A128KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A192KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A192KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A192KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A192KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A192KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A192KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A256KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A256KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A256KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A256KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A256KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode A256KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA1_5       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA1_5       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA1_5       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA1_5       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA1_5       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA1_5       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS256)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A128KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A128KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A128KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A128KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A128KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A128KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A192KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A192KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A192KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A192KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A192KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A192KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A256KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A256KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A256KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A256KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A256KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode A256KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA1_5       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA1_5       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA1_5       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA1_5       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA1_5       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA1_5       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS384)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A128KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A128KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A128KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A128KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A128KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A128KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A192KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A192KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A192KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A192KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A192KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A192KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A256KW       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A256KW       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A256KW       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A256KW       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A256KW       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode A256KW       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA1_5       A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA1_5       A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA1_5       A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA1_5       A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA1_5       A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA1_5       A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA_OAEP     A256GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Signed RS512)) >>= \k -> JWE.jwkEncode RSA_OAEP_256 A256GCM       k (Claims myClaims)
+
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A128KW)) >>= \k -> JWE.jwkEncode A128KW A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A128KW)) >>= \k -> JWE.jwkEncode A128KW A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A128KW)) >>= \k -> JWE.jwkEncode A128KW A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A128KW)) >>= \k -> JWE.jwkEncode A128KW A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A128KW)) >>= \k -> JWE.jwkEncode A128KW A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A128KW)) >>= \k -> JWE.jwkEncode A128KW A256GCM       k (Claims myClaims)
+
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A192KW)) >>= \k -> JWE.jwkEncode A128KW A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A192KW)) >>= \k -> JWE.jwkEncode A128KW A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A192KW)) >>= \k -> JWE.jwkEncode A128KW A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A192KW)) >>= \k -> JWE.jwkEncode A128KW A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A192KW)) >>= \k -> JWE.jwkEncode A128KW A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A192KW)) >>= \k -> JWE.jwkEncode A128KW A256GCM       k (Claims myClaims)
+
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A256KW)) >>= \k -> JWE.jwkEncode A128KW A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A256KW)) >>= \k -> JWE.jwkEncode A128KW A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A256KW)) >>= \k -> JWE.jwkEncode A128KW A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A256KW)) >>= \k -> JWE.jwkEncode A128KW A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A256KW)) >>= \k -> JWE.jwkEncode A128KW A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted A256KW)) >>= \k -> JWE.jwkEncode A128KW A256GCM       k (Claims myClaims)
+
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA_OAEP)) >>= \k -> JWE.jwkEncode A128KW A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA_OAEP)) >>= \k -> JWE.jwkEncode A128KW A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA_OAEP)) >>= \k -> JWE.jwkEncode A128KW A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA_OAEP)) >>= \k -> JWE.jwkEncode A128KW A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA_OAEP)) >>= \k -> JWE.jwkEncode A128KW A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA_OAEP)) >>= \k -> JWE.jwkEncode A128KW A256GCM       k (Claims myClaims)
+
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA_OAEP_256)) >>= \k -> JWE.jwkEncode A128KW A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA_OAEP_256)) >>= \k -> JWE.jwkEncode A128KW A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA_OAEP_256)) >>= \k -> JWE.jwkEncode A128KW A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA_OAEP_256)) >>= \k -> JWE.jwkEncode A128KW A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA_OAEP_256)) >>= \k -> JWE.jwkEncode A128KW A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA_OAEP_256)) >>= \k -> JWE.jwkEncode A128KW A256GCM       k (Claims myClaims)
+
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA1_5)) >>= \k -> JWE.jwkEncode A128KW A128CBC_HS256 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA1_5)) >>= \k -> JWE.jwkEncode A128KW A128GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA1_5)) >>= \k -> JWE.jwkEncode A128KW A192CBC_HS384 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA1_5)) >>= \k -> JWE.jwkEncode A128KW A192GCM       k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA1_5)) >>= \k -> JWE.jwkEncode A128KW A256CBC_HS512 k (Claims myClaims)
+  _ <- generateSymmetricKey myInt (KeyId myKeyId) Sig (Just (Encrypted RSA1_5)) >>= \k -> JWE.jwkEncode A128KW A256GCM       k (Claims myClaims)
+
+  print claims
+  putStrLn $ "\n\n---| END   |-------------------------------------"

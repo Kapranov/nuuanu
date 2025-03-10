@@ -116,7 +116,7 @@ library:
     - entropy
     - fakedata
     - filepath
-    - jose-jwt
+    - jose-jwt >= 0.10.0
     - jsonifier
     - megaparsec
     - memory

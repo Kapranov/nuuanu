@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-
 module Data.String.Conversions (main) where
 
 -- A handy illustration of converting between String,

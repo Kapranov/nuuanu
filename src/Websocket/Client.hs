@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-
 module Websocket.Client ( main ) where
 
 import           Control.Concurrent  (forkIO)

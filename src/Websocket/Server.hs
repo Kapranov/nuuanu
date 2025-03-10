@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-
 module Websocket.Server ( main ) where
 
 import Control.Concurrent (MVar, newMVar, modifyMVar_, modifyMVar, readMVar)

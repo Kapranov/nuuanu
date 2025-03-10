@@ -1141,6 +1141,241 @@ an allow policy).
 
 Tokens can be attenuated by appending a block containing checks.
 
+What algorithm should I use for sign jwt
+------------------------------------------
+
+[jwt.io](https://jwt.io/) referred that there are many algorithms, which are:
+
+```
+HS256 HS384 HS512
+
+RS256 RS384 RS512
+
+ES256 ES384 ES512
+
+PS256 PS384 PS512
+```
+
+What are the differences between these algorithms? And what is the most secure
+one? And if I am going to store the jwt in cookies what algorithm should I use?
+
+For anyone else finding this question, I suggest...
+[Understanding RSA signing for JWT](https://stackoverflow.com/questions/38588319/understanding-rsa-signing-for-jwt)
+
+Specifications - JWA/JWE/JWK/JWS/JWT
+--------------------------------------
+
+1. JWA - JSON Web Algorithms
+2. JWE - JSON Web Encryption
+3. JWK - JSON Web Key
+4. JWS - JSON Web Signature
+5. JWT - JSON Web Token
+
+The JWT specification supports several algorithms for cryptographic signing.
+This library currently supports:
+
+- `ES256K` - ECDSA signature algorithm with secp256k1 curve using SHA-256 hash algorithm ECDSA using secp256k1 curve and SHA-256
+- `ES256`  - ECDSA signature algorithm using SHA-256 hash algorithm                      ECDSA P curve and SHA
+- `ES384`  - ECDSA signature algorithm using SHA-384 hash algorithm                      ECDSA P curve and SHA
+- `ES512`  - ECDSA signature algorithm using SHA-512 hash algorithm                      ECDSA P curve and SHA
+- `EdDSA`  - Ed25519 signature using SHA-512 and Ed448 signature using SHA-3             EdDSA RFC 8037
+             Ed25519 and Ed448 provide 128-bit and 224-bit security respectively
+- `HS256`  - HMAC using SHA-256 hash algorithm                                           HMAC SHA
+- `HS384`  - HMAC using SHA-384 hash algorithm                                           HMAC SHA
+- `HS512`  - HMAC using SHA-512 hash algorithm                                           HMAC SHA
+- `PS256`  - RSASSA-PSS signature using SHA-256 and MGF1 padding with SHA-256            RSASSA-PSS SHA
+- `PS384`  - RSASSA-PSS signature using SHA-384 and MGF1 padding with SHA-384            RSASSA-PSS SHA
+- `PS512`  - RSASSA-PSS signature using SHA-512 and MGF1 padding with SHA-512            RSASSA-PSS SHA
+- `RS256`  - RSASSA-PKCS1-v1_5 signature algorithm using SHA-256 hash algorithm          RSASSA-PKCS-v1_5 SHA
+- `RS384`  - RSASSA-PKCS1-v1_5 signature algorithm using SHA-384 hash algorithm          RSASSA-PKCS-v1_5 SHA
+- `RS512`  - RSASSA-PKCS1-v1_5 signature algorithm using SHA-512 hash algorithm          RSASSA-PKCS-v1_5 SHA
+
+
+`alg` (Algorithm) Header Parameters Values for JWS
+
+```
+λ import Jose.Jwa (JwsAlg(ES256,ES384,ES512,EdDSA,HS256,HS384,HS512,RS256,RS384,RS512))
+λ generateSymmetricKey 256 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.ES256))
+λ generateSymmetricKey 384 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.ES384))
+λ generateSymmetricKey 512 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.ES512))
+λ generateSymmetricKey 256 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.EdDSA))
+λ generateSymmetricKey 384 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.EdDSA))
+λ generateSymmetricKey 512 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.EdDSA))
+λ generateSymmetricKey 256 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.HS256))
+λ generateSymmetricKey 384 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.HS384))
+λ generateSymmetricKey 512 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.HS512))
+λ generateSymmetricKey 256 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.RS256))
+λ generateSymmetricKey 384 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.RS384))
+λ generateSymmetricKey 512 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.RS512))
+
+λ generateRsaKeyPair   256 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.ES256))
+λ generateRsaKeyPair   384 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.ES384))
+λ generateRsaKeyPair   512 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.ES512))
+λ generateRsaKeyPair   256 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.EdDSA))
+λ generateRsaKeyPair   384 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.EdDSA))
+λ generateRsaKeyPair   512 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.EdDSA))
+λ generateRsaKeyPair   256 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.HS256))
+λ generateRsaKeyPair   384 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.HS384))
+λ generateRsaKeyPair   512 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.HS512))
+λ generateRsaKeyPair   256 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.RS256))
+λ generateRsaKeyPair   384 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.RS384))
+λ generateRsaKeyPair   512 (KeyId "helloWorld") Sig (Just (Signed Jose.Jwa.RS512))
+```
+
+```
+λ import Crypto.PubKey.ECC.Generate
+λ import Crypto.PubKey.ECC.Types
+
+λ :i CurveName
+
+λ curve = getCurveByName SEC_p256k1
+λ generate curve
+
+λ curve = getCurveByName SEC_p384r1
+λ generate curve
+
+λ curve = getCurveByName SEC_p521r1
+λ generate curve
+```
+
+```
+λ import Crypto.ECC
+λ import Crypto.PubKey.ECC.Generate
+λ import Crypto.PubKey.ECDSA as ECDSA
+λ import Data.Proxy
+
+λ generate (Proxy :: Proxy Curve_P256R1)
+```
+
+```
+λ import Crypto.PubKey.ECC.Generate
+λ import Crypto.PubKey.ECC.Types
+
+λ :i CurveName
+
+λ curve = getCurveByName SEC_p256k1
+λ generate curve
+
+λ curve = getCurveByName SEC_p384r1
+λ generate curve
+
+λ curve = getCurveByName SEC_p521r1
+λ generate curve
+```
+
+-- Jose.Jwa
+-- JwsAlg - subset of the signature algorithms from the JWA Spec.
+-- ES256
+-- ES384
+-- ES512
+-- EdDSA
+-- HS256
+-- HS384
+-- HS512
+-- RS256
+-- RS384
+-- RS512
+-- None
+-- JweAlg - A subset of the key management algorithms from the JWA Spec.
+-- A128KW
+-- A192KW
+-- A256KW
+-- RSA1_5
+-- RSA_OAEP
+-- RSA_OAEP_256
+-- Enc - Content encryption algorithms from the JWA Spec.
+-- A128CBC_HS256
+-- A128GCM
+-- A192CBC_HS384
+-- A192GCM
+-- A256CBC_HS512
+-- A256GCM
+
+-- [RSA1_5, RSA_OAEP, RSA_OAEP_256, A128KW, A192KW, A256KW] To encrypt content-encryption
+-- key and can be either an RSA or AES-keywrap algorithm. You need to generate a suitable
+-- key to use with this, or load one from storage. With RSA anyone can send you  a JWE if
+-- they have a copy of your public key.
+-- [A128CBC_HS256, A192CBC_HS384, A256CBC_HS512, A128GCM, A192GCM, A256GCM] AES algorithm
+-- used to encrypt the content of your token, for which a single-use key is generated
+-- internally.  AES is much faster and creates shorter tokens,  but both the encoder  and
+-- decoder of the token need to have a copy of the key, which they must keep secret.
+
+-- import Jose.Jwe
+-- import Jose.Jwa
+-- import Jose.Jwk (generateRsaKeyPair, generateSymmetricKey, KeyUse(Enc), KeyId)
+-- (kPub, kPr) <- generateRsaKeyPair 256 (KeyId "helloWorld") Enc Nothing
+-- (kPub, kPr) <- generateRsaKeyPair 384 (KeyId "helloWorld") Enc Nothing
+-- (kPub, kPr) <- generateRsaKeyPair 512 (KeyId "helloWorld") Enc Nothing
+-- Right (Jwt jwt) <- jwkEncode RSA_OAEP A128GCM kPub (Claims "secret claims")
+-- Right (Jwe (hdr, claims)) <- jwkDecode kPr jwt
+-- claims
+-- "secret claims"
+--
+-- aesKey <- generateSymmetricKey 16 (KeyId "helloWorld") Enc Nothing
+-- Right (Jwt jwt) <- jwkEncode A128KW A128GCM aesKey (Claims "secret claims")
+-- Right (Jwe (hdr, claims)) <- jwkDecode aesKey jwt
+-- claims
+-- "secret claims"
+
+-- {"typ": "JWT", "kid": "123", "alg": "RS256"}
+-- For example, a JWK containing an EdDSA public key would look like the following:
+-- {"kty": "OKP", "alg": "EdDSA", "crv": "Ed25519", "x": "60mR98SQlHUSeLeIu7TeJBTLRG10qlcDLU4AJjQdqMQ"}
+
+-- jwkEncode
+-- ecDecode
+-- ed25519Encode
+-- ed25519Decode
+-- ed448Encode
+-- ed448Decode
+-- hmacEncode
+-- hmacDecode
+-- rsaEncode
+-- rsaDecode
+
+-- I'm using some of the functions in Crypto.PubKey.RSA, and wish to read
+-- and write PEM files compatible with openssl.
+-- I need functionality equivalent to these functions from OpenSSL.PEM:
+-- writePKCS8PrivateKey
+-- readPrivateKey
+-- writePublicKey
+-- readPublicKey
+--
+-- Are there functions in some library compatible with Crypto.PubKey.RSA to do this?
+-- https://github.com/haskell-crypto/cryptonite/issues/69
+-- https://hackage.haskell.org/package/cryptostore
+-- https://github.com/ocheron/cryptostore
+-- https://hackage.haskell.org/package/Z-Botan
+-- https://github.com/ZHaskell/z-botan
+-- https://hackage.haskell.org/package/jose-0.11
+-- https://github.com/frasertweedale/hs-jose
+-- https://hackage.haskell.org/package/crypton-1.0.1
+-- https://hackage.haskell.org/package/crypton-1.0.1/docs/Crypto-Hash.html
+-- https://hackage.haskell.org/package/jose-jwt
+-- https://datatracker.ietf.org/doc/html/rfc7518#section-3
+
+--
+-- encode jwks  (JwsEncoding RS256) (Claims . toStrict . Aeson.encode $ claim)
+--
+--{-# LANGUAGE OverloadedStrings #-}
+--
+-- import Web.Scotty
+-- import Data.Text.Lazy (Text, pack)
+-- import Web.JWT (encodeSigned, secret, decodeAndVerrifySignature, defaultJWTClaimsSet)
+-- import Data.Aeson (object, (.=))
+--
+-- Define a secret key
+-- jwtSecret = secret "supersecretkey"
+--
+-- Generate JWT Token
+-- generteToken :: Text -> Text
+-- generteToken username = encodeSigned jwtSecret mempty (defaultJWTClaimsSet username)
+--
+-- Verify JWT
+-- verifyToken :: Text -> Bool
+-- verifyToken token = case decodeAndVerifySignature jwtSecret token of
+--   Just -> True
+--   Nothing -> False
+
 Allow promotion of data types to kind level
 --------------------------------------------
 
